@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "sd"
+version = "0.1.0"
+description = ""
+authors = ["Shanyou Li <shanyouli6@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+typer-slim = "^0.12.0"
+typer-cli = "^0.12.0"
+
+[tool.poetry.scripts]
+sd = "sd.__main__:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
