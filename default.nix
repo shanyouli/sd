@@ -8,7 +8,7 @@ in
     src = ./.;
     pname = "sd";
     pyproject = true;
-    nativeBuildInputs = [poetry-core];
+    nativeBuildInputs = [poetry-core installShellFiles];
     propagatedBuildInputs = [ typer colorama rich];
     postInstall = ''
       installShellCompletion --cmd sd --bash <($out/bin/sd --show-completion bash)
