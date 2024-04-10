@@ -10,6 +10,7 @@ from typing import List
 
 import typer
 
+from sd.api import env, macbid
 from sd.utils.enums import (
     ISLINUX,
     ISMAC,
@@ -20,11 +21,18 @@ from sd.utils.enums import (
     FlakeOutputs,
 )
 
-from sd.api.macbid import macbid
-
-
 app = typer.Typer(add_completion=True)
-app.add_typer(macbid, name="bid", help="Get macos App BundleID!", hidden = not ISMAC)
+app.add_typer(
+    macbid.app,
+    name="bid",
+    help="Get macos App BundleID!",
+    hidden=not ISMAC,
+)
+app.add_typer(
+    env.app,
+    name="env",
+    help="save shell environment variable",
+)  #  callback=env_app_callback
 
 
 class Dotfile:

@@ -24,7 +24,7 @@ def run_cmd(cmd: List[str], shell: bool = False):
 def cmd_getout(cmd: str) -> str:
     "获取命令结果，当结果状态码非0时，抛出错误"
     status_code, result = subprocess.getstatusoutput(cmd)
-    if status_code == "0":
+    if int(status_code) == 0:
         return result
     else:
         raise subprocess.SubprocessError(result)

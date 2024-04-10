@@ -1,12 +1,13 @@
 import os
-import subprocess
 from pathlib import Path
 from typing import List, Union
 
 import typer
-from sd.utils.enums import Colors
 from sd.utils.cmd import cmd_getout
-macbid = typer.Typer()
+from sd.utils.enums import Colors
+from sd.utils.fmt import term_fmt_by_list
+
+app = typer.Typer()
 
 app_path = ["/Applications", os.path.expanduser("~/Applications")]
 PathLink = Union[str, bytes, Path]
@@ -17,13 +18,14 @@ def get_app_list_by_path(path: PathLink) -> List[str]:
     app_list = []
     for i in os.listdir(path):
         if i.endswith(".app"):
-            app_list.append(i)
+            i_path = Path(i)
+            app_list.append(i_path.resolve() if i_path.is_symlink() else i)
         else:
             subpath = f"{path}/{i}"
             if os.path.isdir(subpath):
                 for j in get_app_list_by_path(os.path.join(path, i)):
                     app_list.append(j)
-    return app_list
+    return list(set(app_list))
 
 
 def get_app_list_by_list(paths: List[PathLink]) -> List[str]:
@@ -48,28 +50,29 @@ def get_list_max_size(lst: List[str]) -> int:
     return max(len(i) for i in lst)
 
 
-@macbid.command(help="Get All App Name")
+@app.command(help="Get All App Name")
 def display():
     app_lists = get_app_list_by_list(app_path)
-    pre_size = len(str(len(app_lists)))
-    columns = get_terminal_columns()
-    app_size = get_list_max_size(app_lists)
-    num = columns // (app_size + 4 + pre_size + 2)
-    if num == 0:
-        num = 1
-    messages = ""
-    split = "".rjust(4)
-    for i, appname in enumerate(app_lists):
-        numstr = typer.style(f"{i + 1}".rjust(pre_size, "0"), fg=Colors.INFO.value)
-        appname = typer.style(appname.ljust(app_size), fg=Colors.INFO.value)
-        message = f"{numstr}: {appname}{split}"
-        messages = f"{messages}{message}"
-        if (i + 1) % num == 0:
-            typer.echo(messages)
-            messages = ""
+    term_fmt_by_list(app_lists)
+    # pre_size = len(str(len(app_lists)))
+    # columns = get_terminal_columns()
+    # app_size = get_list_max_size(app_lists)
+    # num = columns // (app_size + 4 + pre_size + 2)
+    # if num == 0:
+    #     num = 1
+    # messages = ""
+    # split = "".rjust(4)
+    # for i, appname in enumerate(app_lists):
+    #     numstr = typer.style(f"{i + 1}".rjust(pre_size, "0"), fg=Colors.INFO.value)
+    #     appname = typer.style(appname.ljust(app_size), fg=Colors.INFO.value)
+    #     message = f"{numstr}: {appname}{split}"
+    #     messages = f"{messages}{message}"
+    #     if (i + 1) % num == 0:
+    #         typer.echo(messages)
+    #         messages = ""
 
 
-@macbid.command(help="Display all app BundleId")
+@app.command(help="Display all app BundleId")
 def db():
     app_lists = get_app_list_by_list(app_path)
     pre_size = len(str(len(app_lists)))
@@ -97,7 +100,7 @@ def db():
             messages = ""
 
 
-@macbid.command(help="get one app bundleid")
+@app.command(help="get one app bundleid")
 def get(
     pkg: str = typer.Argument(None, help="App Path, Please run: getBundleId.py display")
 ):
@@ -110,6 +113,13 @@ def get(
         )
         raise typer.Abort()
 
+@app.callback(invoke_without_command=True)
+def default(ctx: typer.Context) -> None:
+    """Sub-command that I would like to be the default."""
+    if ctx.invoked_subcommand is not None:
+        # print("Skipping default command to run sub-command.")
+        return
+    display()
 
 if __name__ == "__main__":
-    macbid()
+    app()
