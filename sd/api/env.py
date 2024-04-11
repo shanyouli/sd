@@ -2,7 +2,7 @@ import json
 import os
 
 import typer
-from sd.utils.cmd import cmd_getout
+from sd.utils import cmd
 
 app = typer.Typer()
 JSON_FILE = "sdenv.json"
@@ -25,8 +25,7 @@ def save_env_file(f: str = JSON_FILE):
     elif par_dir == "":
         f = os.path.join(get_cache_dir(), f)
     SHELL = os.getenv("SHELL")
-    # proc = cmd_getout(f"{SHELL} -c -i -l printenv")
-    proc = cmd_getout(
+    proc = cmd.getout(
         f"""
     unset PATH __NIX_DARWIN_SET_ENVIRONMENT_DONE __ETC_ZPROFILE_SOURCED
     unset __ETC_ZSHENV_SOURCED __ETC_ZSHRC_SOURC
@@ -49,6 +48,7 @@ def save_env_file(f: str = JSON_FILE):
 @app.command(help="save environment var on file!")
 def save(file: str = typer.Argument(JSON_FILE, help="save file")):
     save_env_file(file)
+
 
 # see @https://github.com/tiangolo/typer/issues/18
 @app.callback(invoke_without_command=True)

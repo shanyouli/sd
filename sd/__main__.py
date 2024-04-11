@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import os
-import platform
 import re
 import subprocess
 from functools import wraps
@@ -10,7 +9,7 @@ from typing import List
 
 import typer
 
-from sd.api import env, macbid
+from sd.api import env, macbid, macos, nix
 from sd.utils.enums import (
     ISLINUX,
     ISMAC,
@@ -33,6 +32,15 @@ app.add_typer(
     name="env",
     help="save shell environment variable",
 )  #  callback=env_app_callback
+
+app.add_typer(
+    macos.app,
+    name="darwin",
+    help="macos Commonly used shortcut commands",
+    hidden=not ISMAC,
+)
+
+app.add_typer(nix.app, name="sys", help="System Configuration Management By Nix")
 
 
 class Dotfile:
@@ -320,147 +328,6 @@ def select(nixos: bool, darwin: bool, home_manager: bool):
 
 
 @app.command(
-    help="builds an initial configuration",
-    hidden=PLATFORM == FlakeOutputs.NIXOS,
-)
-@change_workdir
-def bootstrap(
-    host: str = typer.Argument(
-        DEFAULT_HOST, help="the hostname of the configuration to build"
-    ),
-    nixos: bool = False,
-    darwin: bool = False,
-    home_manager: bool = False,
-    remote: bool = typer.Option(
-        default=False, help="whether to fetch current changes from the remote"
-    ),
-    debug: bool = False,
-):
-    cfg = select(nixos=nixos, darwin=darwin, home_manager=home_manager)
-    flags = [
-        "-v",
-        "--experimental-features",
-        "nix-command flakes",
-        "--extra-substituters",
-        "https://shanyouli.cachix.org",
-        "--impure",
-    ]
-    if debug:
-        flags.append("--show-trace")
-        flags.append("-L")
-    bootstrap_flake = REMOTE_FLAKE if remote else DOTFILE.get_flake(True)
-    if host is None:
-        typer.secho("Host unspecified", fg=Colors.ERROR.value)
-        return
-    if cfg is None:
-        typer.secho("missing configuration", fg=Colors.ERROR.value)
-    elif cfg == FlakeOutputs.NIXOS:
-        typer.secho(
-            "boostrap does not apply to nixos systems.",
-            fg=Colors.ERROR.value,
-        )
-        raise typer.Abort()
-    elif cfg == FlakeOutputs.DARWIN:
-        diskSetup()
-        shell_backup()
-        flake = f"{bootstrap_flake}#{cfg.value}.{host}.config.system.build.toplevel"
-        nix = (
-            "nix" if test_cmd_exists("nix") else "/nix/var/nix/profiles/default/bin/nix"
-        )
-        run_cmd([nix, "build", flake] + flags)
-        run_cmd(
-            f"./result/sw/bin/darwin-rebuild switch --flake {bootstrap_flake}#{host}".split()
-        )
-    elif cfg == FlakeOutputs.HOME_MANAGER:
-        flake = f"{bootstrap_flake}#{host}"
-        run_cmd(
-            ["nix", "run"]
-            + flags
-            + [
-                "github:nix-community/home-manager",
-                "--no-write-lock-file",
-                "--",
-                "switch",
-                "--flake",
-                flake,
-                "-b",
-                "backup",
-            ]
-        )
-    else:
-        typer.secho("could not infer system type.", fg=Colors.ERROR.value)
-        raise typer.Abort()
-
-
-@app.command(
-    help="builds the specified flake output; infers correct platform to use if not specified",
-    # no_args_is_help=True,
-)
-def build(
-    host: str = typer.Argument(
-        DEFAULT_HOST, help="the hostname of the configuration to build"
-    ),
-    remote: bool = typer.Option(
-        default=False, help="whether to fetch current changes from the remote"
-    ),
-    nixos: bool = False,
-    darwin: bool = False,
-    home_manager: bool = False,
-    debug: bool = True,
-):
-    cfg = select(nixos=nixos, darwin=darwin, home_manager=home_manager)
-    if cfg is None:
-        return
-    elif cfg == FlakeOutputs.NIXOS:
-        cmd = ["sudo", "nixos-rebuild", "build", "--flake"]
-    elif cfg == FlakeOutputs.DARWIN:
-        cmd = ["darwin-rebuild", "build", "--flake"]
-    elif cfg == FlakeOutputs.HOME_MANAGER:
-        cmd = ["home-manager", "built", "--flake"]
-    else:
-        typer.secho("could not infer system type.", fg=Colors.ERROR.value)
-        raise typer.Abort()
-    flake = f"{REMOTE_FLAKE if remote else DOTFILE.get_flake()}#{host}"
-    flags = ["--impure"]
-    if debug:
-        flags.append("--show-trace")
-        flags.append("-L")
-    run_cmd(cmd + [flake] + flags)
-
-
-@app.command(
-    help="remove previously built configurations and symlinks from the current directory",
-)
-@change_workdir
-def clean(
-    filename: str = typer.Argument(
-        "result", help="the filename to be cleaned, or '*' for all files"
-    ),
-):
-    run_cmd(f"find . -type l -maxdepth 1 -name {filename} -exec rm {{}} +".split())
-
-
-@app.command(
-    help="configure disk setup for nix-darwin",
-    hidden=PLATFORM != FlakeOutputs.DARWIN,
-)
-def diskSetup():
-    if not test_cmd("grep -q ^run\\b /etc/synthetic.conf".split()):
-        APFS_UTIL = "/System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util"
-        typer.secho("setting up /etc/synthetic.conf", fg=Colors.INFO.value)
-        run_cmd(
-            "echo 'run\tprivate/var/run' | sudo tee -a /etc/synthetic.conf".split(),
-            shell=True,
-        )
-        run_cmd([APFS_UTIL, "-B"])
-        run_cmd([APFS_UTIL, "-t"])
-    if not test_cmd(["test", "-L", "/run"]):
-        typer.secho("linking /run directory", fg=Colors.INFO.value)
-        run_cmd("sudo ln -sfn private/var/run /run".split())
-    typer.secho("disk setup complete", fg=Colors.SUCCESS.value)
-
-
-@app.command(
     help="run garbage collection on unused nix store paths",
     # no_args_is_help=True,
 )
@@ -563,48 +430,6 @@ def update(
 def pull():
     cmd = "git stash && git pull && git stash apply"
     run_cmd(cmd.split())
-
-
-@app.command(
-    help="builds and activates the specified flake output; infers correct platform to use if not specified",
-    # no_args_is_help=True,
-)
-def switch(
-    host: str = typer.Argument(
-        default=DEFAULT_HOST,
-        help="the hostname of the configuration to build",
-    ),
-    remote: bool = typer.Option(
-        default=False, help="whether to fetch current changes from the remote"
-    ),
-    nixos: bool = False,
-    darwin: bool = False,
-    home_manager: bool = False,
-    debug: bool = False,
-):
-    if not host:
-        typer.secho("Error: host configuration not specified.", fg=Colors.ERROR.value)
-        raise typer.Abort()
-
-    cfg = select(nixos=nixos, darwin=darwin, home_manager=home_manager)
-    if cfg is None:
-        return
-    elif cfg == FlakeOutputs.NIXOS:
-        cmd = "sudo nixos-rebuild switch --flake"
-    elif cfg == FlakeOutputs.DARWIN:
-        shell_backup()
-        cmd = "darwin-rebuild switch --flake"
-    elif cfg == FlakeOutputs.HOME_MANAGER:
-        cmd = "home-manager switch --flake"
-    else:
-        typer.secho("could not infer system type.", fg=Colors.ERROR.value)
-        raise typer.Abort()
-    flake = [f"{REMOTE_FLAKE}#{host}"] if remote else [f"{DOTFILE.get_flake()}#{host}"]
-    flags = ["--impure"]
-    if debug:
-        flags.append("--show-trace")
-        flags.append("-L")
-    run_cmd(cmd.split() + flake + flags)
 
 
 @app.command(help="cache the output environment of flake.nix")

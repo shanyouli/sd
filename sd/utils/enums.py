@@ -18,6 +18,23 @@ class FlakeOutputs(Enum):
     DARWIN = "darwinConfigurations"
     HOME_MANAGER = "homeConfigurations"
 
+class Dotfiles:
+    @property
+    def value(self):
+        for i in [
+            os.getenv("DOTFILES"),
+            "/etc/dotfiles",
+            "/etc/nixos",
+            os.path.expanduser("~/.config/dotfiles"),
+            os.path.expanduser("~/.dotfiles"),
+            os.path.expanduser("~/.nixpkgs"),
+        ]:
+            if (
+                os.path.isdir(i)
+                and os.path.exists(os.path.join(i, "flake.nix"))
+                and os.path.exists(os.path.join(i, ".git"))
+            ):
+                return os.path.realpath(i)
 
 UNAME = platform.uname()
 user_id = run(["id", "-un"], capture_output=True).stdout.decode().strip()
@@ -28,3 +45,6 @@ USERNAME = os.getenv("USER") if user_id == "root" else user_id
 
 ISMAC = SYSTEM_OS == "darwin"
 ISLINUX = SYSTEM_OS == "linux"
+
+REMOTE_FLAKE = "github:shanyouli/dotfiles"
+

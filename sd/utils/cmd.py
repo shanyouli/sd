@@ -1,30 +1,51 @@
 import subprocess
 from typing import List
-from typer import secho
-from sd.utils.enums import Colors
 
-def test_cmd_exists(cmd):
-    return (
-        subprocess.run(["/usr/bin/env", "type", cmd], capture_output=True).returncode
-        == 0
+from sd.utils.enums import Colors
+from typer import secho
+
+
+def fmt(cmd_list: List[str]):
+    cmd_str = " ".join(cmd_list)
+    return f"> {cmd_str}"
+
+
+def run(
+    cmd_list: List[str],
+    capture_output: bool = False,
+    shell: bool = False,
+    show: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    if show:
+        secho(fmt(cmd_list), fg=Colors.INFO.value)
+    return subprocess.run(
+        (" ".join(cmd_list) if shell else cmd_list),
+        capture_output=capture_output,
+        shell=shell,
     )
 
 
-def test_cmd(cmd: List[str]):
-    return subprocess.run(cmd).returncode == 0
+def exists(cmd_str: str) -> bool:
+    return run(["/usr/bin/env", "type", cmd_str], capture_output=True).returncode == 0
 
-def fmt_cmd(cmd: List[str]):
-    cmd_str = " ".join(cmd)
-    return f"> {cmd_str}"
 
-def run_cmd(cmd: List[str], shell: bool = False):
-    secho(fmt_cmd(cmd), fg=Colors.INFO.value)
-    return subprocess.run((" ".join(cmd) if shell else cmd), shell=shell)
+def test(cmd_list: List[str]) -> bool:
+    return run(cmd_list).returncode == 0
 
-def cmd_getout(cmd: str) -> str:
+
+def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) -> str:
     "获取命令结果，当结果状态码非0时，抛出错误"
-    status_code, result = subprocess.getstatusoutput(cmd)
-    if int(status_code) == 0:
-        return result
+    if isinstance(cmd_str, str):
+        if show:
+            secho(cmd_str, fg=Colors.INFO.value)
+        status_code, result = subprocess.getstatusoutput(cmd_str)
+        if status_code == 0:
+            return result
+        else:
+            raise subprocess.SubprocessError(result)
     else:
-        raise subprocess.SubprocessError(result)
+        process = run(cmd_str, capture_output=True, shell=shell, show=show)
+        if process.returncode == 0:
+            return process.stdout.decode().strip()
+        else:
+            raise subprocess.SubprocessError(process.stdout.decode().strip())
