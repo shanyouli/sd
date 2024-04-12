@@ -12,10 +12,11 @@ def get_cache_dir():
     return xdg_cache_dir if xdg_cache_dir else os.path.expanduser("~/.cache")
 
 
-def save_env_file(f: str = JSON_FILE):
-    par_dir = path.get_parent(f)
+@app.command(help="save environment var on file!")
+def save(file: str = typer.Argument(JSON_FILE, help="save file")):
+    par_dir = path.get_parent(file)
     if not par_dir.is_absolute():
-        f = os.path.join(get_cache_dir(), f)
+        file = os.path.join(get_cache_dir(), file)
     SHELL = os.getenv("SHELL")
     proc = cmd.getout(
         f"""
@@ -32,13 +33,8 @@ def save_env_file(f: str = JSON_FILE):
         if not tup.startswith("_") and tup.find("=") != -1:
             temp = tup.split("=")
             source_env[temp[0].strip()] = temp[1].strip()
-    fmt.info(f"Save the current environment variables to file {f}")
-    path.json_write(f, source_env)
-
-
-@app.command(help="save environment var on file!")
-def save(file: str = typer.Argument(JSON_FILE, help="save file")):
-    save_env_file(file)
+    fmt.info(f"Save the current environment variables to file {file}")
+    path.json_write(file, source_env)
 
 
 # see @https://github.com/tiangolo/typer/issues/18
@@ -48,4 +44,4 @@ def default(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is not None:
         # print("Skipping default command to run sub-command.")
         return
-    save_env_file(JSON_FILE)
+    save(JSON_FILE)
