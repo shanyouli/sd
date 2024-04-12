@@ -154,6 +154,7 @@ def bootstrap(
         return
     if cfg is None:
         fmt.error("Missing configuration")
+        raise typer.Abord()
     elif cfg == FlakeOutputs.NIXOS:
         fmt.error("Bootstrap does not apply to nixos system.")
         raise typer.Abort()

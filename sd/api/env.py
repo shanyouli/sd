@@ -1,8 +1,7 @@
-import json
 import os
 
 import typer
-from sd.utils import cmd
+from sd.utils import cmd, fmt, path
 
 app = typer.Typer()
 JSON_FILE = "sdenv.json"
@@ -10,19 +9,12 @@ JSON_FILE = "sdenv.json"
 
 def get_cache_dir():
     xdg_cache_dir = os.getenv("XDG_CACHE_HOME")
-    if not xdg_cache_dir:
-        xdg_cache_dir = os.path.expanduser("~/.cache")
-    if not os.path.isdir(xdg_cache_dir):
-        os.makedirs(xdg_cache_dir)
-    return xdg_cache_dir
+    return xdg_cache_dir if xdg_cache_dir else os.path.expanduser("~/.cache")
 
 
 def save_env_file(f: str = JSON_FILE):
-    f = os.path.expanduser(f)
-    par_dir = os.path.dirname(f)
-    if os.path.isabs(par_dir):
-        os.makedirs(par_dir)
-    elif par_dir == "":
+    par_dir = path.get_parent(f)
+    if not par_dir.is_absolute():
         f = os.path.join(get_cache_dir(), f)
     SHELL = os.getenv("SHELL")
     proc = cmd.getout(
@@ -40,9 +32,8 @@ def save_env_file(f: str = JSON_FILE):
         if not tup.startswith("_") and tup.find("=") != -1:
             temp = tup.split("=")
             source_env[temp[0].strip()] = temp[1].strip()
-    with open(f, mode="w", encoding="utf-8") as f:
-        # json.dump(source_env, f, indent=2)
-        f.write(json.dumps(source_env, indent=2))
+    fmt.info(f"Save the current environment variables to file {f}")
+    path.json_write(f, source_env)
 
 
 @app.command(help="save environment var on file!")
