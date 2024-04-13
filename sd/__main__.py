@@ -7,7 +7,7 @@ from sd.utils.enums import (
     ISMAC,
 )
 
-app = typer.Typer(add_completion=True)
+app = typer.Typer(no_args_is_help=True)
 app.add_typer(
     macbid.app,
     name='bid',
@@ -25,9 +25,15 @@ app.add_typer(
     name='darwin',
     help='macos Commonly used shortcut commands',
     hidden=not ISMAC,
+    no_args_is_help=True,
 )
 
-app.add_typer(nix.app, name='sys', help='System Configuration Management By Nix')
+app.add_typer(
+    nix.app,
+    name='sys',
+    help='System Configuration Management By Nix',
+    no_args_is_help=True,
+)
 
 
 if __name__ == '__main__':
