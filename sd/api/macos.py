@@ -21,5 +21,39 @@ def diskSetup():
     fmt.success("disk setup complete")
 
 
+@app.command(help="Docker restart")
+def refresh(
+    rd: bool = typer.Option(False, help="Redirect the bundle id to specify the version")
+):
+    cmd.run(
+        [
+            "defaults",
+            "write",
+            "com.apple.dock",
+            "ResetLaunchPad",
+            "-bool",
+            "true",
+            "&&",
+            "killall",
+            "Dock",
+        ],
+        shell=True,
+    )
+    if rd:
+        cmd.run(
+            [
+                "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister",
+                "-kill",
+                "-r",
+                "-domain local",
+                "-domain",
+                "system",
+                "-domain",
+                "user",
+            ],
+            shell=True,
+        )
+
+
 if __name__ == "__main__":
     app()
