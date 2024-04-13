@@ -1,6 +1,6 @@
 import subprocess
 from typing import List
-
+from sd.utils import fmt as strfmt
 from sd.utils.enums import Colors
 from typer import secho
 
@@ -17,7 +17,7 @@ def run(
     show: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     if show:
-        secho(fmt(cmd_list), fg=Colors.INFO.value)
+        strfmt.info(fmt(cmd_list))
     return subprocess.run(
         (" ".join(cmd_list) if shell else cmd_list),
         capture_output=capture_output,
@@ -37,7 +37,7 @@ def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) ->
     "获取命令结果，当结果状态码非0时，抛出错误"
     if isinstance(cmd_str, str):
         if show:
-            secho(cmd_str, fg=Colors.INFO.value)
+            strfmt.info(cmd_str)
         status_code, result = subprocess.getstatusoutput(cmd_str)
         if status_code == 0:
             return result

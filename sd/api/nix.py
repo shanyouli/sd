@@ -1,9 +1,11 @@
+import json
 import os
+import re
 from functools import wraps
 from pathlib import Path
 from subprocess import SubprocessError
 from typing import List
-import json
+
 import typer
 from sd.utils import cmd, fmt, path
 from sd.utils.enums import (
@@ -124,6 +126,127 @@ def change_workdir(func):
         return result
 
     return wrapper
+
+
+class Gc:
+    def __init__(
+        self,
+        dry_run: bool = True,
+        re_pattern: str = r"(.*)-(\d+)-link$",
+        save_num: int = 1,
+        default: str = "default",
+    ):
+        self.dry_run = dry_run
+        self.re_pattern = re.compile(re_pattern)
+        self.save_num = save_num
+        self.clear_list = []
+        self.profiles = [
+            i
+            for i in [
+                "/nix/var/nix/profiles",
+                os.path.expanduser("~/.local/state/nix/profiles"),
+            ]
+            if path.is_dir(i)
+        ]
+        self.gc_autos = [i for i in ["/nix/var/nix/gcroots/auto"] if path.is_dir(i)]
+        self.default = default
+
+    def remove_from_link_list(self):
+        if self.clear_list:
+            if self.dry_run:
+                cdir = os.getcwd()
+                fmt.info(f"The following files will be deleted{cdir} ..")
+                for i in self.clear_list:
+                    fmt.info(f"delete: {os.path.join(cdir, i)}")
+                # print(*self.clear_list, sep="\n")
+            else:
+                for i in self.clear_list:
+                    path.remove_file_or_link(i)
+        else:
+            fmt.info(f"Not File will be deleted...")
+
+    @change_workdir
+    def gc_auto(self, profile: Path):
+        store = {}
+        self.clear_list = []
+        for i in os.listdir():
+            if path.is_link(i):
+                target_path = path.readlink(i)
+                if not path.is_exist(target_path):
+                    self.clear_list.append(i)
+                    continue
+            f_prefix_num = self.re_pattern.match(target_path.name)
+            if not f_prefix_num:
+                store[target_path] = [(i, 1)]
+                continue
+            f_prefix = f_prefix_num.group(1)
+            num = int(f_prefix_num.group(2))
+            if f_prefix not in store:
+                store[f_prefix] = [(i, num)]
+            else:
+                store[f_prefix].append((i, num))
+        for i in store:
+            store[i] = sorted(store[i], key=lambda k: k[-1], reverse=True)
+            for cpath in store[i][self.save_num :]:
+                self.clear_list.append(cpath[0])
+        self.remove_from_link_list()
+
+    @change_workdir
+    def gc_profile(self, profile: Path):
+        store = {}
+        self.clear_list = []
+        for i in os.listdir():
+            if path.is_link(i):
+                if not path.is_exist(path.readlink(i)):
+                    self.clear_list.append(i)
+                    continue
+            f_prefix_num = self.re_pattern.match(i)
+            if not f_prefix_num:
+                continue
+            f_prefix = f_prefix_num.group(1)
+            num = int(f_prefix_num.group(2))
+            if f_prefix not in store:
+                store[f_prefix] = [(i, num)]
+            else:
+                store[f_prefix].append((i, num))
+        for i in store.values():
+            i = sorted(i, key=lambda k: k[-1], reverse=True)
+            for cpath in i[self.save_num :]:
+                self.clear_list.append(cpath[0])
+        self.remove_from_link_list()
+
+    def gc_clear_list(self):
+        for i in self.gc_autos:
+            self.gc_auto(i)
+        for i in self.profiles:
+            self.gc_profile(i)
+
+    def clear_remove_default(self, reverse: bool = False):
+        for i in self.gc_autos:
+            for k in os.listdir(i):
+                kpath = os.path.join(i, k)
+                if not path.is_link(kpath):
+                    continue
+                is_p = path.readlink(kpath).name.startswith(self.default)
+                is_p = (not is_p) if reverse else is_p
+                if is_p:
+                    if self.dry_run:
+                        fmt.warn(f"Delete {kpath}")
+                    else:
+                        path.remove_file_or_link(kpath)
+        for i in self.profiles:
+            for k in os.listdir(i):
+                kpath = os.path.join(i, k)
+                is_p = os.path.basename(kpath).startswith(self.default)
+                is_p = (not is_p) if reverse else is_p
+                if is_p:
+                    if self.dry_run:
+                        fmt.warn(f"Delete {kpath}")
+                    else:
+                        path.remove_file_or_link(kpath)
+
+    def run(self):
+        run_cmd(["sudo", "nix", "store", "gc", "-v"], self.dry_run)
 
 
 @app.command(
@@ -430,3 +553,66 @@ def repl(
         fmt.info(f"> {cmd_str}")
     else:
         os.system(cmd_str)
+
+
+@app.command(
+    help="run garbage collection on unused nix store paths",
+    # no_args_is_help=True,
+)
+def gc(
+    delete_older_than: str = typer.Option(
+        None,
+        "--delete-older-than",
+        "-d",
+        metavar="[AGE]",
+        help="specify minimum age for deleting store paths",
+    ),
+    save: int = typer.Option(
+        3, "--save", "-s", help="Save the last x number of builds"
+    ),
+    dry_run: bool = typer.Option(False, help="test the result of garbage collection"),
+    # only: bool = typer.Option(False, help='Keep only one build'),
+):
+    if delete_older_than:
+        cmd = f"nix-collect-garbage --delete-older-then {delete_older_than} {'--dry-run' if dry_run else ''}"
+        run_cmd(["sudo"] + cmd.split(), dry_run)
+    else:
+        nix_gc = Gc(dry_run=dry_run, save_num=save)
+        nix_gc.gc_clear_list()
+        nix_gc.run()
+
+
+@app.command(help="Reinitialize darwin", hidden=PLATFORM != FlakeOutputs.DARWIN)
+def init(
+    host: str = typer.Argument(
+        DEFAULT_HOST, help="the hostname of the configuration to build"
+    ),
+    dry_run: bool = typer.Option(False, help="Test the result of init"),
+):
+    if PLATFORM != FlakeOutputs.DARWIN:
+        typer.secho("command is only supported on macos.")
+        raise typer.Abort()
+    nixgc = Gc(dry_run=dry_run, default="default")
+    nixgc.clear_remove_default()
+    run_cmd(
+        [
+            "sudo",
+            "nix",
+            "upgrade-nix",
+            "-p",
+            "/nix/var/nix/profiles/default",
+            "--keep-outputs",
+            "--keep-derivations",
+            "--experimental-features",
+            '"nix-command flakes"',
+        ],
+        dry_run,
+    )
+    # sudo nix upgrade-nix -p /nix/var/nix/profiles/default
+    nixgc.clear_remove_default(True)
+    nixgc.run()
+    bootstrap(host=host,darwin=True, remote=False,extra_args=None, dry_run=dry_run)
+
+
+if __name__ == "__main__":
+    app()

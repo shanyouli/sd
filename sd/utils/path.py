@@ -8,37 +8,43 @@ PathLink = Union[str, bytes, Path]
 
 
 def is_exist(p: PathLink) -> bool:
-    return Path(os.path.expanduser(p)).exists()
+    return Path(p).expanduser().exists()
 
 
 def is_file(p: PathLink) -> bool:
-    return Path(os.path.expanduser(p)).is_file()
+    return Path(p).expanduser().is_file()
 
 
 def is_link(p: PathLink) -> bool:
-    return Path(os.path.expanduser(p)).is_symlink()
+    return Path(p).expanduser().is_symlink()
 
 
 def is_dir(p: PathLink) -> bool:
-    return Path(os.path.expanduser(p)).is_dir()
+    return Path(p).expanduser().is_dir()
 
 
 def get_parent(p: PathLink) -> Path:
-    return Path(os.path.expanduser(p)).parent
+    return Path(p).expanduser().parent
 
 
 def suffix_is(p: PathLink, ext) -> bool:
     ext = ext if ext.startswith(".") else f".{ext}"
-    return Path(os.path.expanduser(p)).suffix == ext
+    return Path(p).expanduser().suffix == ext
 
 
-def readlink(p: PathLink) -> Path:
-    p = Path(os.path.expanduser(p))
-    return p.resolve() if p.is_symlink() else p
+def readlink(p: PathLink, isLast: bool = False) -> Path:
+    p = Path(p).expanduser()
+    if p.is_symlink():
+        return p.resolve() if isLast else p.readlink()
+    else:
+        return p
 
+def link_exists(p: PathLink) -> bool:
+    p = readlink(p)
+    return p.exists()
 
 def mkdir(p: PathLink) -> None:
-    p = Path(os.path.expanduser(p))
+    p = Path(p).expanduser()
     if p.exists():
         if not p.is_dir():
             raise FileExistsError(f"Path {p._str} already exists")
@@ -46,8 +52,16 @@ def mkdir(p: PathLink) -> None:
         try:
             os.makedirs()
         except PermissionError:
-            cmd.run(f"sudo mkdir -p {os.path.abspath(p)}")
+            cmd.getout(f"sudo mkdir -p {os.path.abspath(p)}")
 
+def remove_file_or_link(p: PathLink) -> None:
+    try:
+        if is_link(p):
+            Path(p).unlink()
+        elif is_file(p):
+            os.remove(p)
+    except PermissionError:
+        cmd.getout(f"sudo rm -vf {os.path.abspath(p)}")
 
 def json_write(p: PathLink, dic, indent: int = 2) -> None:
     parent_dir = get_parent(p)
@@ -58,7 +72,7 @@ def json_write(p: PathLink, dic, indent: int = 2) -> None:
 
 
 def json_read(p: PathLink) -> dict:
-    p = Path(os.path.expanduser(p))
+    p = Path(p).expanduser()
     if is_file(p):
         with open(p, mode="r", encoding="utf-8") as f:
             return json.load(f)
