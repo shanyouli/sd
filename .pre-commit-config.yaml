@@ -1,0 +1,22 @@
+default_stages:
+- commit
+exclude: (.devenv.flake.nix)
+repos:
+- repo: local
+  hooks:
+  - entry: "ruff check --force-exclude"
+    name: ruff-lint
+    id: ruff-lint
+    language: system
+    description: "Run 'ruff' for extremely fast python linting"
+    types: [file, python]
+    args: [--fix]
+    require_serial: true
+  - entry: "ruff format --force-exclude"
+    name: ruff-format
+    id: ruff-format
+    language: system
+    description: "Run 'ruff' for extremely fast python formatting"
+    language: system
+    types: [file, python]
+    args: []
