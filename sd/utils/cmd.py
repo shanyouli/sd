@@ -1,32 +1,33 @@
 import subprocess
 from typing import List
+
 from sd.utils import fmt as strfmt
-from sd.utils.enums import Colors
-from typer import secho
-
-
-def fmt(cmd_list: List[str]):
-    cmd_str = " ".join(cmd_list)
-    return f"> {cmd_str}"
 
 
 def run(
-    cmd_list: List[str],
+    cmd_list: List[str] | str,
     capture_output: bool = False,
     shell: bool = False,
     show: bool = False,
+    dry_run: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    if show:
-        strfmt.info(fmt(cmd_list))
-    return subprocess.run(
-        (" ".join(cmd_list) if shell else cmd_list),
-        capture_output=capture_output,
-        shell=shell,
-    )
+    if isinstance(cmd_list, str):
+        shell = True
+        cmd_str = cmd_list
+    else:
+        cmd_str = ' '.join(cmd_list)
+    if show or dry_run:
+        strfmt.info(f'> {cmd_str}')
+    if not dry_run:
+        return subprocess.run(
+            (cmd_str if shell else cmd_list),
+            capture_output=capture_output,
+            shell=shell,
+        )
 
 
 def exists(cmd_str: str) -> bool:
-    return run(["/usr/bin/env", "type", cmd_str], capture_output=True).returncode == 0
+    return run(['/usr/bin/env', 'type', cmd_str], capture_output=True).returncode == 0
 
 
 def test(cmd_list: List[str]) -> bool:
@@ -34,10 +35,10 @@ def test(cmd_list: List[str]) -> bool:
 
 
 def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) -> str:
-    "获取命令结果，当结果状态码非0时，抛出错误"
+    '获取命令结果，当结果状态码非0时，抛出错误'
     if isinstance(cmd_str, str):
         if show:
-            strfmt.info(cmd_str)
+            strfmt.info(f'> {cmd_str}')
         status_code, result = subprocess.getstatusoutput(cmd_str)
         if status_code == 0:
             return result

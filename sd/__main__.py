@@ -2,7 +2,7 @@
 
 import typer
 
-from sd.api import env, macbid, macos, nix
+from sd.api import env, launchctl, macbid, macos, nix
 from sd.utils import cmd
 from sd.utils.enums import ISMAC
 
@@ -44,7 +44,19 @@ if SYSAPP != 'nix':
         hidden=cmd.exists('nix'),
         no_args_is_help=True,
     )
-
+if cmd.exists('launchctl'):
+    app.add_typer(
+        launchctl.app,
+        name='sc',
+        help='macos launchctl services manager',
+        no_args_is_help=True,
+    )
+    app.add_typer(
+        launchctl.app,
+        name='service',
+        help='macos launchctl services manager',
+        no_args_is_help=True,
+    )
 
 if __name__ == '__main__':
     app()
