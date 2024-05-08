@@ -77,13 +77,6 @@ def get_flake_inputs_by_nix(flake_path: Path = None):
         raise typer.Abort()
 
 
-def run_cmd(cmd_list: List[str], dry_run: bool = False, shell: bool = False):
-    if dry_run:
-        fmt.info(cmd.fmt(cmd_list))
-    else:
-        cmd.run(cmd_list, shell=shell)
-
-
 def get_flake_platform():
     if cmd.exists('nixos-rebuild'):
         # if we're on nixos, this command is built in
@@ -246,7 +239,7 @@ class Gc:
                         path.remove_file_or_link(kpath)
 
     def run(self):
-        run_cmd(['sudo', 'nix', 'store', 'gc', '-v'], self.dry_run)
+        cmd.run(['sudo', 'nix', 'store', 'gc', '-v'], dry_run=self.dry_run)
 
 
 @app.command(
@@ -315,7 +308,7 @@ def update(
         flakes.remove(stable_input)
     inputs = [f'--update-input {input}' for input in flakes]
     fmt.info(f"updating {','.join(flakes)}" if msg is None else msg)
-    run_cmd(['nix', 'flake', 'lock'] + inputs + flags, dry_run=dry_run, shell=True)
+    cmd.run(['nix', 'flake', 'lock'] + inputs + flags, dry_run=dry_run, shell=True)
 
 
 # HACK: When macos is updated it automatically generates new /etc/shells,
@@ -387,10 +380,10 @@ def bootstrap(
         shell_backup()
         flake = f'{bootstrap_flake}#{cfg.value}.{host}.config.system.build.toplevel'
         nix = 'nix' if cmd.exists('nix') else '/nix/var/nix/profiles/default/bin/nix'
-        run_cmd([nix, 'build', flake] + flags, dry_run)
-        run_cmd(
+        cmd.run([nix, 'build', flake] + flags, dry_run=dry_run)
+        cmd.run(
             f'./result/sw/bin/darwin-rebuild switch --flake {bootstrap_flake}#{host}'.split(),
-            dry_run,
+            dry_run=dry_run,
         )
     elif cfg == FlakeOutputs.HOME_MANAGER:
         try:
@@ -414,7 +407,7 @@ def bootstrap(
                 'backup',
             ]
         )
-        run_cmd(cmd_list, dry_run)
+        cmd.run(cmd_list, dry_run=dry_run)
     else:
         fmt.error('Could not infer system type.')
         raise typer.Abord()
@@ -450,7 +443,7 @@ def build(
     flags += ['--show-trace', '-L'] if debug else []
     flags += extra_args if extra_args else []
     cmd_list += cmd_list + [flake] + flags
-    run_cmd(cmd_list, dry_run)
+    cmd.run(cmd_list, dry_run=dry_run)
 
 
 @app.command(help='builds and activates the specified flake output')
@@ -488,7 +481,7 @@ def switch(
     flags += ['--show-trace', '-L'] if debug else []
     flags += extra_args if extra_args else []
     cmd_list = cmd_str.split() + flake + flags
-    run_cmd(cmd_list, dry_run)
+    cmd.run(cmd_list, dry_run=dry_run)
 
 
 @app.command(help='remove previously built configurations and symlinks from DOTFILES')
@@ -500,14 +493,14 @@ def clean(
     dry_run: bool = typer.Option(False, help='Test the result'),
 ):
     cmd_list = f'find . -type l -maxdepth 1 -name {filename} -exec rm {{}} +'.split()
-    run_cmd(cmd_list, dry_run)
+    cmd.run(cmd_list, dry_run=dry_run)
 
 
 @app.command(help='pull changes from remote repo')
 @change_workdir
 def pull(dry_run: bool = typer.Option(False, help='Test the result')):
     cmd_str = 'git stash && git pull && git stash apply'
-    run_cmd(cmd_str.split(), dry_run)
+    cmd.run(cmd_str.split(), dry_run=dry_run)
 
 
 @app.command(help='cache the output environment of flake.nix')
@@ -517,7 +510,7 @@ def cache(
     dry_run: bool = typer.Option(False, help='Test the result'),
 ):
     cmd_str = f"nix flake archive --json | jq -r '.path,(.inputs|to_entries[].value.path)' | cachix push {cache_name}"
-    run_cmd(cmd_str.split(), shell=True)
+    cmd.run(cmd_str.split(), shell=True, dry_run=dry_run)
 
 
 @app.command(help='nix repl')
@@ -575,7 +568,7 @@ def gc(
 ):
     if delete_older_than:
         cmd = f"nix-collect-garbage --delete-older-then {delete_older_than} {'--dry-run' if dry_run else ''}"
-        run_cmd(['sudo'] + cmd.split(), dry_run)
+        cmd.run(['sudo'] + cmd.split(), dry_run=dry_run)
     else:
         nix_gc = Gc(dry_run=dry_run, save_num=save)
         nix_gc.gc_clear_list()
@@ -594,7 +587,7 @@ def init(
         raise typer.Abort()
     nixgc = Gc(dry_run=dry_run, default='default')
     nixgc.clear_remove_default()
-    run_cmd(
+    cmd.run(
         [
             'sudo',
             'nix',
@@ -606,7 +599,7 @@ def init(
             '--experimental-features',
             '"nix-command flakes"',
         ],
-        dry_run,
+        dry_run=dry_run,
     )
     # sudo nix upgrade-nix -p /nix/var/nix/profiles/default
     nixgc.clear_remove_default(True)
