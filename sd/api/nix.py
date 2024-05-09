@@ -68,10 +68,18 @@ def get_flake_inputs_by_lock(flake_path: Path = None):
 def get_flake_inputs_by_nix(flake_path: Path = None):
     flake_path = os.getcwd() if flake_path is None else flake_path
     if path.is_file(os.path.join(os.path.realpath(flake_path), 'flake.lock')):
-        flake_json = cmd.getout(
+        flake_json_text = cmd.getout(
             f"""nix eval --raw --impure --expr 'builtins.toJSON (builtins.getFlake "{flake_path}").inputs'"""
         )
-        return [i for i in json.loads(flake_json)]
+        flake_json_list = []
+        is_json_start = False
+        for i in flake_json_text.splitlines():
+            if is_json_start:
+                flake_json_list.append(i)
+            if '{' in i:
+                is_json_start = True
+                flake_json_list.append(i)
+        return [i for i in json.loads('\n'.join(flake_json_list))]
     else:
         fmt.error(f'The {flake_path} directory is not a nix-flake project')
         raise typer.Abort()
