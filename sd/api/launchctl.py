@@ -112,9 +112,11 @@ def disable(
         service_name = get_service(name)
         if service_name and service_name.starswith('org.nixos'):
             uid = cmd.run(['id', '-u'], capture_output=True).stdout.decode().strip()
-            cmd.run(['launchctl', 'bootout', f'gui/{uid}/name'], dry_run=dry_run)
+            cmd.run(['launchctl', 'bootout', '-w', f'gui/{uid}/name'], dry_run=dry_run)
         elif os.path.exists(os.path.expanduser(name)):
-            cmd.run(['launchctl', 'unload', os.path.expanduser(name)], dry_run=dry_run)
+            cmd.run(
+                ['launchctl', 'unload', '-w', os.path.expanduser(name)], dry_run=dry_run
+            )
     else:
         fmt.error('Only plist and file modes generated with nix-darwin are supported.')
         raise typer.Abort()
@@ -129,7 +131,7 @@ def enable(
         service_name = get_service(name)
         service_path = get_service_path(service_name) if service_name else name
         if os.path.exists(service_path):
-            cmd.run(['launchctl', 'load', service_path], dry_run=dry_run)
+            cmd.run(['launchctl', 'load', '-w', service_path], dry_run=dry_run)
     else:
         fmt.error('Only plist and file modes generated with nix-darwin are supported.')
         raise typer.Abort()
