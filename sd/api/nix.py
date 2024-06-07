@@ -281,13 +281,18 @@ def update(
     flags = ['--commit-lock-file'] if commit else []
     flakes = []
     all_flakes = get_flake_inputs_by_nix()
-    stable_input = 'darwin-stable' if ISMAC else 'nixos-stable'
-    ignore_inputs = ['nixos-stable'] if ISMAC else ['darwin-stable', 'darwin']
+    ignore_inputs = ['nixos-stable', 'darwin-stable', 'darwin']
     msg = None
     if flake:
         for i in flake:
             if i in all_flakes:
                 flakes.append(i)
+            elif i == 'stable':
+                if ISMAC:
+                    flakes.append('darwin-stable')
+                    flakes.append('darwin')
+                else:
+                    flakes.append('nixos-stable')
             else:
                 fmt.error(
                     f'The flake({i}) does not exist, please check all_flake or update it.'
@@ -296,7 +301,10 @@ def update(
                     f'Currently supported input-flakes are: {" ".join(all_flakes)}'
                 )
                 raise typer.Abort()
-    elif not_flake:
+    all_flakes = (
+        all_flakes if stable else [i for i in all_flakes if i not in ignore_inputs]
+    )
+    if not_flake:
         flakes = all_flakes
         for i in not_flake:
             if i in flakes:
@@ -305,15 +313,7 @@ def update(
                 fmt.warn(f'The flake({i}) does not exist, will ignore it.')
     else:
         msg = 'updating all flake inputs'
-        flakes = all_flakes
-    for i in ignore_inputs:
-        if i in flakes:
-            flakes.remove(i)
-    if stable:
-        if stable_input not in flakes and stable_input in all_flakes:
-            flakes.append(stable_input)
-    elif stable_input in flakes:
-        flakes.remove(stable_input)
+        flakes = flakes if flakes else all_flakes
     inputs = [f'--update-input {input}' for input in flakes]
     fmt.info(f"updating {','.join(flakes)}" if msg is None else msg)
     cmd.run(['nix', 'flake', 'lock'] + inputs + flags, dry_run=dry_run, shell=True)
