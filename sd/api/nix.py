@@ -280,7 +280,12 @@ def update(
 ):
     flags = ['--commit-lock-file'] if commit else []
     flakes = []
-    all_flakes = get_flake_inputs_by_nix()
+    # all_flakes = get_flake_inputs_by_nix()
+    # There is a problem with using nix-repl to get the flake,
+    # when nix-repl reports an error, it will cause the inputs.flake to be very slow,
+    # it should be used to get it by using the flake.lock file,
+    # if the inputs.flake has been modified, you can use the nix-flake command to update the lock.
+    all_flakes = get_flake_inputs_by_lock()
     ignore_inputs = ['nixos-stable', 'darwin-stable', 'darwin']
     msg = None
     if flake:

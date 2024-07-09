@@ -111,6 +111,10 @@ def info(msg: str) -> None:
     typer.secho(f'INFO: {msg}', fg=Colors.INFO.value)
 
 
+def echo(msg: str) -> None:
+    typer.echo(f'{msg}')
+
+
 def warn(msg: str) -> None:
     typer.secho(f'WARN: {msg}', fg=Colors.WARN.value)
 

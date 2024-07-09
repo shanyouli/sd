@@ -155,7 +155,7 @@ def status(
     name: str = typer.Argument('', help='service name'),
     dry_run: bool = typer.Option(False, help='Test the command'),
 ):
-    name = get_service(name)
+    name = get_service(name) if name else ''
     if name:
         result = cmd.getout(f'launchctl list {name}')
 
@@ -177,7 +177,24 @@ def status(
             fmt.term_fmt_by_dict(out, use_num=False)
 
     else:
-        raise typer.Abort()
+        result = cmd.getout('launchctl list | grep org.nixos')
+        all_service_status = [i.split() for i in result.splitlines()]
+        max_pid = fmt.max_size([i[0] for i in all_service_status])
+        max_code_status = fmt.max_size([i[1] for i in all_service_status])
+        max_service_name = fmt.max_size([i[2] for i in all_service_status])
+        max_pid = max_pid if max_pid >= 3 else 3
+        len_ser_name = fmt.str_len('service name')
+        max_service_name = (
+            max_service_name if max_service_name >= len_ser_name else len_ser_name
+        )
+        fmt.info('All currently manageable services: ')
+        fmt.echo(
+            f"{fmt.str_ljust('service name', max_service_name)}\t{fmt.str_ljust('pid', max_pid)}\t{fmt.str_ljust('Last Code Status', max_code_status)}"
+        )
+        for i in all_service_status:
+            fmt.echo(
+                f'{fmt.str_ljust(i[2], max_service_name)}\t{fmt.str_ljust(i[0], max_pid)}\t{fmt.str_ljust(i[1], max_code_status)}'
+            )
 
 
 if __name__ == '__main__':
