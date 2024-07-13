@@ -27,7 +27,8 @@ def run(
 
 
 def exists(cmd_str: str) -> bool:
-    return run(['/usr/bin/env', 'type', cmd_str], capture_output=True).returncode == 0
+    # '/usr/bin/env' not such file or directory . ubuntu github workflow
+    return run(['type', cmd_str], capture_output=True).returncode == 0
 
 
 def test(cmd_list: List[str]) -> bool:
@@ -35,7 +36,7 @@ def test(cmd_list: List[str]) -> bool:
 
 
 def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) -> str:
-    '获取命令结果，当结果状态码非0时，抛出错误'
+    "获取命令结果，当结果状态码非0时，抛出错误"
     if isinstance(cmd_str, str):
         if show:
             strfmt.info(f'> {cmd_str}')
