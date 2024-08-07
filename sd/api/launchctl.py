@@ -11,7 +11,7 @@ app = typer.Typer()
 def get_all_service():
     result = cmd.getout('launchctl list')
     result_list = result.split('\n')
-    compile = re.compile('.*org\.nixos\.(.*)')
+    compile = re.compile(r'.*org\.nixos\.(.*)')
     return [compile.match(i).group(1) for i in result_list if compile.match(i)]
 
 
