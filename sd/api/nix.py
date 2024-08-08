@@ -530,10 +530,12 @@ def cache(
 @change_workdir
 def repl(
     pkgs: bool = typer.Option(False, help='import <nixpkgs>'),
+    unstable: bool = typer.Option(False, help='import <nixpkgs-unstable>'),
     flake: bool = typer.Option(False, help='Automatically import build flake'),
     dry_run: bool = typer.Option(False, help='Test the result'),
 ):
     cmd_str = 'nix repl --expr '
+    exarg = 'import <nixpkgs-unstable> {}' if unstable else None
     exarg = 'import <nixpkgs> {}' if pkgs else None
     if flake:
         flake_dir = os.getcwd()
