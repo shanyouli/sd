@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from typing import List, Union
+from typing import Union
 from sd.utils import cmd
 
 PathLink = Union[str, bytes, Path]
@@ -39,9 +39,11 @@ def readlink(p: PathLink, isLast: bool = False) -> Path:
     else:
         return p
 
+
 def link_exists(p: PathLink) -> bool:
     p = readlink(p)
     return p.exists()
+
 
 def mkdir(p: PathLink) -> None:
     p = Path(p).expanduser()
@@ -54,6 +56,7 @@ def mkdir(p: PathLink) -> None:
         except PermissionError:
             cmd.getout(f"sudo mkdir -p {os.path.abspath(p)}")
 
+
 def remove_file_or_link(p: PathLink) -> None:
     try:
         if is_link(p):
@@ -62,6 +65,7 @@ def remove_file_or_link(p: PathLink) -> None:
             os.remove(p)
     except PermissionError:
         cmd.getout(f"sudo rm -vf {os.path.abspath(p)}")
+
 
 def json_write(p: PathLink, dic, indent: int = 2) -> None:
     parent_dir = get_parent(p)

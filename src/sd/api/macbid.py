@@ -51,7 +51,9 @@ def db():
 
 @app.command(help="get one app bundleid")
 def get(
-    pkg: str = typer.Argument(None, help="App Path, Please run: getBundleId.py display")
+    pkg: str = typer.Argument(
+        None, help="App Path, Please run: getBundleId.py display"
+    ),
 ):
     if path.is_exist(pkg) or pkg in get_app_list_by_list(app_path):
         fmt.info(get_app_bundleid(pkg))
