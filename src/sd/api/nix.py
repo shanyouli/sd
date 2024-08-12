@@ -16,10 +16,33 @@ from sd.utils.enums import (
     Dotfiles,
     FlakeOutputs,
 )
+import typer.completion
+from typer._completion_shared import Shells
 
 DOTFILES = Dotfiles().value
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(
+    add_completion=False, no_args_is_help=True
+)  # add_completion 为 True 时表示使用默认补全
+app_completion = typer.Typer(
+    help="Generate and install completion scripts.", hidden=True
+)
+app.add_typer(app_completion, name="completion")
+
+
+@app_completion.command(
+    no_args_is_help=True,
+    help="Show completion for the specified shell, to copy or customize it.",
+)
+def show(ctx: typer.Context, shell: Shells) -> None:
+    typer.completion.show_callback(ctx, None, shell)
+
+
+@app_completion.command(
+    no_args_is_help=True, help="Install completion for the specified shell."
+)
+def install(ctx: typer.Context, shell: Shells) -> None:
+    typer.completion.install_callback(ctx, None, shell)
 
 
 def get_flake(current_dir: bool = False) -> str:
@@ -623,4 +646,5 @@ def init(
 
 
 if __name__ == "__main__":
+    typer.completion.completion_init()
     app()

@@ -27,7 +27,7 @@ def run(
 
 
 def exists(cmd_str: str) -> bool:
-    return run(["/usr/bin/env", "type", cmd_str], capture_output=True).returncode == 0
+    return run(["env", "type", cmd_str], capture_output=True).returncode == 0
 
 
 def test(cmd_list: List[str]) -> bool:

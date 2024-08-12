@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import typer
+import sys
 
 from sd.api import env, launchctl, macbid, macos, nix
 from sd.utils import cmd
@@ -16,7 +17,31 @@ if (
     SYSAPP = "nix"
 
 else:
-    app = typer.Typer(no_args_is_help=True)
+    import typer.completion
+    from typer._completion_shared import Shells
+
+    app = typer.Typer(
+        add_completion=False, no_args_is_help=True
+    )  # add_completion 为 True 时表示使用默认补全
+    app_completion = typer.Typer(
+        help="Generate and install completion scripts.", hidden=True
+    )
+    app.add_typer(app_completion, name="completion")
+
+    @app_completion.command(
+        no_args_is_help=True,
+        help="Show completion for the specified shell, to copy or customize it.",
+    )
+    def show(ctx: typer.Context, shell: Shells) -> None:
+        typer.completion.show_callback(ctx, None, shell)
+
+    @app_completion.command(
+        no_args_is_help=True, help="Install completion for the specified shell."
+    )
+    def install(ctx: typer.Context, shell: Shells) -> None:
+        typer.completion.install_callback(ctx, None, shell)
+
+
 app.add_typer(
     macbid.app,
     name="bid",
@@ -58,5 +83,11 @@ if cmd.exists("launchctl"):
         no_args_is_help=True,
     )
 
+
+def main():
+    typer.completion.completion_init()
+    sys.exit(app())
+
+
 if __name__ == "__main__":
-    app()
+    main()
