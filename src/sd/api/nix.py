@@ -536,7 +536,7 @@ def clean(
 @change_workdir
 def pull(dry_run: bool = typer.Option(False, help="Test the result")):
     cmd_str = "git stash && git pull && git stash apply"
-    cmd.run(cmd_str.split(), dry_run=dry_run)
+    cmd.run(cmd_str, shell=True, dry_run=dry_run)
 
 
 @app.command(help="cache the output environment of flake.nix")

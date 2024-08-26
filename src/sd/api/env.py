@@ -1,5 +1,4 @@
 import os
-
 import typer
 from sd.utils import cmd, fmt, path
 
@@ -18,13 +17,15 @@ def save(file: str = typer.Argument(JSON_FILE, help="save file")):
     if not par_dir.is_absolute():
         file = os.path.join(get_cache_dir(), file)
     SHELL = os.getenv("SHELL")
+    SHELL = SHELL if SHELL.startswith("/") else cmd.getout(f"which {SHELL}")
     proc = cmd.getout(
         f"""
     unset PATH __NIX_DARWIN_SET_ENVIRONMENT_DONE __ETC_ZPROFILE_SOURCED
     unset __ETC_ZSHENV_SOURCED __ETC_ZSHRC_SOURC
-    {SHELL} -i -c -l "printenv"
+    {SHELL} -i -c -l "env"
     """
     )
+    # 使用正则表达式去除转义字符
     proc_list = (
         i for i in proc.split("\n") if not i.startswith("_") and i.find("=") != -1
     )
@@ -32,7 +33,19 @@ def save(file: str = typer.Argument(JSON_FILE, help="save file")):
     for tup in proc_list:
         if not tup.startswith("_") and tup.find("=") != -1:
             temp = tup.split("=")
-            source_env[temp[0].strip()] = temp[1].strip()
+            # break
+            temp_name = temp[0].strip()
+            if temp_name.endswith("\\SHELL"):
+                source_env["SHELL"] = temp[1].strip()
+            elif temp_name == "PATH":
+                temp_values = [
+                    i
+                    for i in temp[1].strip().split(":")
+                    if not i.startswith("/nix/store")
+                ]
+                source_env["PATH"] = ":".join(temp_values)
+            else:
+                source_env[temp_name] = temp[1].strip()
     fmt.info(f"Save the current environment variables to file {file}")
     path.json_write(file, source_env)
 
