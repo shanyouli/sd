@@ -395,7 +395,7 @@ def bootstrap(
     flags = [
         "-v",
         "--experimental-features",
-        "nix-command flakes",
+        '"nix-command flakes"',
         "--extra-substituters",
         "https://shanyouli.cachix.org",
         "--impure",
