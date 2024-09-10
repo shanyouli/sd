@@ -550,7 +550,6 @@ def cache(
 
 
 @app.command(help="nix repl")
-@change_workdir
 def repl(
     pkgs: bool = typer.Option(False, help="import <nixpkgs>"),
     unstable: bool = typer.Option(False, help="import <nixpkgs-unstable>"),
@@ -561,25 +560,9 @@ def repl(
     exarg = "import <nixpkgs-unstable> {}" if unstable else None
     exarg = "import <nixpkgs> {}" if pkgs else None
     if flake:
-        flake_dir = os.getcwd()
-        exarg = f"""
-        let mysrc = builtins.getFlake "{flake_dir}";
-            lib = mysrc.inputs.nixpkgs.lib.extend (self: super: {{
-              my = import "{flake_dir}/lib" {{
-                inherit (mysrc) inputs;
-                lib = self;
-              }};
-            }});
-            platform = mysrc.{PLATFORM.value}."{DEFAULT_HOST}";
-            myPlatForm = {{
-                inherit lib;
-                inherit mysrc;
-                inherit (platform) config options system _module;
-                pkgs = { exarg if exarg else "platform.pkgs"};
-            }};
-        in myPlatForm
-        """
-    cmd_str += "'" + exarg + "'" if exarg else "builtins"
+        cmd_str = f"nix --extra-experimental-features repl-flake repl {get_flake()}"
+    else:
+        cmd_str += "'" + exarg + "'" if exarg else "builtins"
     if dry_run:
         fmt.info(f"> {cmd_str}")
     else:
