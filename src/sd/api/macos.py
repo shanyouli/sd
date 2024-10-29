@@ -2,7 +2,7 @@ import typer
 import plistlib
 import tempfile
 from pathlib import Path
-from sd.utils import cmd, fmt
+from sd.utils import cmd, fmt, path
 
 app = typer.Typer()
 
@@ -22,6 +22,59 @@ def diskSetup():
         fmt.info("linking /run directory")
         cmd.run("sudo ln -sfn private/var/run /run".split())
     fmt.success("disk setup complete")
+
+
+@app.command(help="make alias, When target is None, it means get the original path.")
+def alias(
+    source: str = typer.Argument(None, help="source paths"),
+    target: str = typer.Argument(None, help="alias target path."),
+):
+    source = path.abspath(source)
+    if target is None:
+        if (
+            path.is_file(source)
+            and cmd.run(f"file {source} | grep 'MacOS Alias file'").returncode == 0
+        ):
+            source_path = cmd.getout(f"""osascript <<EOF
+tell application "Finder"
+    set theItem to (POSIX file "{source}") as alias
+    if the kind of theItem is "alias" then
+        get the POSIX path of ((original item of theItem) as text)
+    end if
+end tell
+EOF
+            """)
+            fmt.info(f"The alias for file {source} is {source_path}")
+            return source_path
+        else:
+            fmt.error(f"{source} Not an alias file")
+            return source
+    target = path.abspath(target)
+
+    if not path.is_exist(source):
+        fmt.error(f"Please Confirm the existence of path {source}.")
+        raise typer.Abort()
+
+    if path.is_exist(target):
+        fmt.error(
+            f"{target} is exist, Overwriting operations are not allowed, resulting in the loss of important files."
+        )
+        raise typer.Abort()
+    target_parent = path.get_parent(target).as_posix()
+    path.mkdir(target_parent)
+    fmt.info(f"make alias from {source} to {target}")
+    if cmd.exists("mkalias"):
+        cmd.run(["mkalias", source, target])
+    else:
+        cmd.run(f"""osascript <<EOF
+tell application "Finder"
+    set originalPath to POSIX file "{source}"
+    set aliasPath to POSIX file "{target_parent}"
+    make alias file to originalPath at aliasPath
+    set name of result to "{Path(target).name}"
+end tell
+EOF
+        """)
 
 
 @app.command(help="Docker restart")

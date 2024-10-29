@@ -470,7 +470,7 @@ def build(
     elif cfg == FlakeOutputs.DARWIN:
         cmd_list = ["darwin-rebuild", "build", "--flake"]
     elif cfg == FlakeOutputs.HOME_MANAGER:
-        cmd_list = ["home-manager", "built", "--flake"]
+        cmd_list = ["home-manager", "build", "--flake"]
     else:
         fmt.error("could not infer system type.")
         raise typer.Abort()
@@ -478,7 +478,7 @@ def build(
     flags = ["--impure"]
     flags += ["--show-trace", "-L"] if debug else []
     flags += extra_args if extra_args else []
-    cmd_list += cmd_list + [flake] + flags
+    cmd_list += [flake] + flags
     cmd.run(cmd_list, dry_run=dry_run)
 
 

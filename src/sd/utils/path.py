@@ -57,6 +57,10 @@ def mkdir(p: PathLink) -> None:
             cmd.getout(f"sudo mkdir -p {os.path.abspath(p)}")
 
 
+def abspath(p: PathLink) -> Path:
+    return os.path.abspath(Path(p).expanduser())
+
+
 def remove_file_or_link(p: PathLink) -> None:
     try:
         if is_link(p):
