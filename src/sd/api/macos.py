@@ -2,7 +2,7 @@ import typer
 import plistlib
 import tempfile
 from pathlib import Path
-from sd.utils import cmd, fmt, path
+from sd.utils import cmd, fmt, path, macutils
 
 app = typer.Typer()
 
@@ -22,6 +22,14 @@ def diskSetup():
         fmt.info("linking /run directory")
         cmd.run("sudo ln -sfn private/var/run /run".split())
     fmt.success("disk setup complete")
+
+
+@app.command(help="sync all.app to other file")
+def syncapps(
+    source: str = typer.Argument(None, help="source path"),
+    target: str = typer.Argument(None, help="target path."),
+):
+    macutils.sync_trampolines(source, target)
 
 
 @app.command(help="make alias, When target is None, it means get the original path.")
