@@ -1,4 +1,5 @@
 import os
+
 import typer
 from sd.utils import cmd, fmt, path
 
@@ -21,31 +22,43 @@ def save(file: str = typer.Argument(JSON_FILE, help="save file")):
     proc = cmd.getout(
         f"""
     unset PATH __NIX_DARWIN_SET_ENVIRONMENT_DONE __ETC_ZPROFILE_SOURCED
-    unset __ETC_ZSHENV_SOURCED __ETC_ZSHRC_SOURC
+    unset __ETC_ZSHENV_SOURCED __ETC_ZSHRC_SOURCED __HM_SESS_VARS_SOURCED
+    unset FZF_DEFAULT_OPTS
     {SHELL} -i -c -l "env"
     """
     )
     # 使用正则表达式去除转义字符
-    proc_list = (
-        i for i in proc.split("\n") if not i.startswith("_") and i.find("=") != -1
-    )
     source_env = {}
-    for tup in proc_list:
-        if not tup.startswith("_") and tup.find("=") != -1:
+    prev_key = None
+    for tup in proc.split("\n"):
+        if tup.find("=") != -1:
             temp = tup.split("=")
-            # break
-            temp_name = temp[0].strip()
-            if temp_name.endswith("\\SHELL"):
-                source_env["SHELL"] = temp[1].strip()
-            elif temp_name == "PATH":
+            prev_key = temp[0].strip()
+            if prev_key.endswith("\\SHELL"):
+                prev_key = None
+            elif prev_key == "PATH":
                 temp_values = [
                     i
                     for i in temp[1].strip().split(":")
                     if not i.startswith("/nix/store")
                 ]
                 source_env["PATH"] = ":".join(temp_values)
+            elif prev_key not in [
+                "__NIX_DARWIN_SET_ENVIRONMENT_DONE",
+                "__ETC_ZPROFILE_SOURCED",
+                "__ETC_ZSHENV_SOURCED",
+                "__ETC_ZSHRC_SOURCED",
+                "__HM_SESS_VARS_SOURCED",
+            ]:
+                source_env[prev_key] = (
+                    temp[1].strip() if len(temp) == 2 else "=".join(temp[1:])
+                )
             else:
-                source_env[temp_name] = temp[1].strip()
+                prev_key = None
+        elif prev_key is not None:
+            source_env[prev_key] = (
+                "" if source_env[prev_key] == "" else (source_env[prev_key] + "\n")
+            ) + tup.strip()
     fmt.info(f"Save the current environment variables to file {file}")
     path.json_write(file, source_env)
 
