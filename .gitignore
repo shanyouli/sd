@@ -1,6 +1,6 @@
 /**/__pycache__
 /result
-/.DS_Store
+.DS_Store
 /dist/
 /.python-version
 /test.nix
