@@ -1,5 +1,5 @@
 default_stages:
-- commit
+- pre-commit
 exclude: (.devenv.flake.nix)
 repos:
 - repo: local
