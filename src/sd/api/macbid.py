@@ -4,31 +4,43 @@ from typing import List, Union
 from subprocess import SubprocessError
 import typer
 from sd.utils import cmd, fmt, path
-from sd.utils.fmt import term_fmt_by_dict, term_fmt_by_list
+from sd.utils.fmt import term_fmt_by_dict
 
 app = typer.Typer()
 
-app_path = ["/Applications", os.path.expanduser("~/Applications")]
+APP_PATH = [
+    "/Applications",
+    os.path.expanduser("~/Applications"),
+    "/System/Applications",
+]
 PathLink = Union[str, bytes, Path]
 
 
-def get_app_list_by_path(p: PathLink) -> List[str]:
+def get_app_list_by_path(p: PathLink) -> dict[str, str]:
     """获取目录下所有的App文件"""
-    app_list = []
+    app_list = {}
     for i in os.listdir(p):
         app_path = os.path.join(p, i)
         if path.suffix_is(app_path, "app"):
-            app_list.append(path.readlink(app_path).name)
+            link_path = path.readlink(app_path)
+            if link_path.as_posix().startswith("."):
+                old_cwd = os.getcwd()
+                os.chdir(Path(app_path).parent)
+                app_list[link_path.name] = link_path.absolute().as_posix()
+                os.chdir(old_cwd)
+            else:
+                app_list[link_path.name] = link_path.absolute().as_posix()
         else:
             if os.path.isdir(app_path):
-                for j in get_app_list_by_path(app_path):
-                    app_list.append(j)
-    return list(set(app_list))
+                for k, v in get_app_list_by_path(app_path).items():
+                    app_list[k] = v
+    return app_list
 
 
-def get_app_list_by_list(paths: List[PathLink]) -> List[str]:
+def get_app_list_by_list(paths: List[PathLink]) -> dict[str, str]:
     app_lists = [get_app_list_by_path(i) for i in paths if path.is_dir(i)]
-    return [j for i in app_lists for j in i]
+    return {k: v for i in app_lists for k, v in i.items()}
+    # return [j for i in app_lists for j in i]
 
 
 def get_app_bundleid_by_appname(app_name: str) -> str:
@@ -50,7 +62,7 @@ def get_app_bundleid_by_info(f: PathLink) -> str:
 
 def get_app_bundleid_by_path(p: PathLink) -> str:
     "获取 路径的 bundle ip， 该路径必须是app程序"
-    bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r {p}")
+    bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r '{p}'")
     if bundleid == "(null)":
         if cmd.run(f"file {p} | grep 'MacOS Alias file' >/dev/null").returncode == 0:
             try:
@@ -59,30 +71,35 @@ def get_app_bundleid_by_path(p: PathLink) -> str:
                 p = alias(p, None)
             except ModuleNotFoundError as e:
                 fmt.error(e)
-        try:
-            bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r {p}")
-        except SubprocessError as e:
-            bundleid = (
-                get_app_bundleid_by_info(p) if "could not find" in str(e) else "(null)"
-            )
+            try:
+                bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r '{p}'")
+            except SubprocessError as e:
+                bundleid = (
+                    get_app_bundleid_by_info(p)
+                    if "could not find" in str(e)
+                    else "(null)"
+                )
     if bundleid == "(null)":
-        fmt.info(f"The path of {p} has no bundleid!")
-        return "null"
+        try:
+            return get_app_bundleid_by_appname(Path(p).name)
+        except SubprocessError as e:
+            fmt.info(f"The path of {p} has no bundleid! {str(e)}")
+            return "null"
     else:
         return bundleid
 
 
 @app.command(help="Get All App Name")
 def display():
-    app_lists = get_app_list_by_list(app_path)
-    term_fmt_by_list(app_lists)
+    app_lists = get_app_list_by_list(APP_PATH)
+    term_fmt_by_dict(dict(sorted(app_lists.items(), key=lambda x: x[0])))
 
 
 @app.command(help="Display all app BundleId")
 def db():
-    app_lists = get_app_list_by_list(app_path)
-    app_dict = {i: get_app_bundleid_by_appname(i) for i in app_lists}
-    term_fmt_by_dict(app_dict)
+    app_lists = get_app_list_by_list(APP_PATH)
+    app_dict = {i: get_app_bundleid_by_path(app_lists[i]) for i in app_lists}
+    term_fmt_by_dict(dict(sorted(app_dict.items(), key=lambda x: x[0])))
 
 
 @app.command(help="get one app bundleid")
@@ -92,14 +109,16 @@ def get(
     ),
 ):
     bundleid = None
-    if pkg in get_app_list_by_list(app_path):
-        bundleid = get_app_bundleid_by_appname(pkg)
-    elif path.is_exist(pkg):
+    if path.is_exist(pkg):
         p = path.abspath(pkg)
         bundleid = get_app_bundleid_by_path(p)
     else:
-        fmt.error(f"Didn't find the {pkg}, please use the command display view")
-        raise typer.Abort()
+        app_lists = get_app_list_by_list(APP_PATH)
+        if pkg in app_lists.keys():
+            bundleid = get_app_bundleid_by_path(app_lists[pkg])
+        else:
+            fmt.error(f"Didn't find the {pkg}, please use the command display view")
+            raise typer.Abort()
     if bundleid is None or bundleid == "null":
         fmt.warn(f"No bundleid found for {pkg}, please check if {pkg} is the program")
     else:
