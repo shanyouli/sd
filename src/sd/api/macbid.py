@@ -40,11 +40,10 @@ def get_app_list_by_path(p: PathLink) -> dict[str, str]:
 def get_app_list_by_list(paths: List[PathLink]) -> dict[str, str]:
     app_lists = [get_app_list_by_path(i) for i in paths if path.is_dir(i)]
     return {k: v for i in app_lists for k, v in i.items()}
-    # return [j for i in app_lists for j in i]
 
 
 def get_app_bundleid_by_appname(app_name: str) -> str:
-    "获取app的Bundle Ip"
+    "获取app的Bundle ID"
     return cmd.getout(f"osascript -e 'id of app \"{app_name}\"'")
 
 
@@ -63,28 +62,30 @@ def get_app_bundleid_by_info(f: PathLink) -> str:
 def get_app_bundleid_by_path(p: PathLink) -> str:
     "获取 路径的 bundle ip， 该路径必须是app程序"
     bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r '{p}'")
-    if bundleid == "(null)":
-        if cmd.run(f"file {p} | grep 'MacOS Alias file' >/dev/null").returncode == 0:
-            try:
-                from sd.api.macos import alias
-
-                p = alias(p, None)
-            except ModuleNotFoundError as e:
-                fmt.error(e)
-            try:
-                bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r '{p}'")
-            except SubprocessError as e:
-                bundleid = (
-                    get_app_bundleid_by_info(p)
-                    if "could not find" in str(e)
-                    else "(null)"
-                )
-    if bundleid == "(null)":
+    if (
+        bundleid == "(null)"
+        and cmd.run(f"file {p} | grep 'MacOS Alias file' >/dev/null").returncode == 0
+    ):
         try:
-            return get_app_bundleid_by_appname(Path(p).name)
-        except SubprocessError as e:
-            fmt.info(f"The path of {p} has no bundleid! {str(e)}")
-            return "null"
+            from sd.api.macos import alias
+
+            p = alias(p, None)
+            # mdls -name 不支持 /nix/store/ 下文件
+            if not p.startswith("/nix/store"):
+                bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r '{p}'")
+        except (ModuleNotFoundError, SubprocessError) as e:
+            bundleid = "(null)"
+            fmt.error(e)
+    if bundleid == "(null)":
+        bundleid = get_app_bundleid_by_info(p)
+        if bundleid:
+            return bundleid
+        else:
+            try:
+                return get_app_bundleid_by_appname(Path(p).name)
+            except SubprocessError as e:
+                fmt.info(f"The path of {p} has no bundleid! {str(e)}")
+                return "null"
     else:
         return bundleid
 
