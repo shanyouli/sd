@@ -255,9 +255,9 @@ def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation = None):
             generation_first = generations[1]
             generation_second = generations[0]
     fmt.info(
-        f"Current build creation information is {format_generation(generation_first)}"
+        f"Previous build creation information {format_generation(generation_first)}"
     )
-    fmt.info(f"Previous build information is {format_generation(generation_second)}")
+    fmt.info(f"Current build information {format_generation(generation_second)}")
     cmd.run(
         ["nvd", "diff", str(generation_first.path), str(generation_second.path)],
         dry_run=dry_run,
@@ -265,6 +265,8 @@ def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation = None):
 
 
 ### -----  end: display nix diff ------------------------------------
+
+
 class Gc:
     def __init__(
         self,
@@ -638,8 +640,11 @@ def switch(
     cmd_list = cmd_str.split() + flake + flags
     use_home = cfg == FlakeOutputs.HOME_MANAGER
     old_generation = get_current_generation(use_home)
+    hm_generation = get_current_generation(True)
     cmd.run(cmd_list, dry_run=dry_run)
     nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
+    if old_generation != hm_generation:
+        nix_diff(use_home=(not use_home), dry_run=dry_run, old_generation=hm_generation)
 
 
 @app.command(help="Showing different information for the two latest builds")
