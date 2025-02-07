@@ -1,12 +1,16 @@
+import getpass
 import json
 import os
 import re
+from dataclasses import dataclass
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from subprocess import SubprocessError
 from typing import List
 
 import typer
+import typer.completion
 from sd.utils import cmd, fmt, path
 from sd.utils.enums import (
     ISMAC,
@@ -16,7 +20,6 @@ from sd.utils.enums import (
     Dotfiles,
     FlakeOutputs,
 )
-import typer.completion
 from typer._completion_shared import Shells
 
 DOTFILES = Dotfiles().value
@@ -152,6 +155,116 @@ def change_workdir(func):
     return wrapper
 
 
+### * display nix diff ------------------------------------
+@dataclass
+class Generation:
+    version: int
+    path: Path
+    created_at: datetime
+
+
+def get_hm_profiles_root() -> Path:
+    # A copy of https://github.com/nix-community/home-manager/blob/f1490b8/home-manager/home-manager#L119-L140
+    global_nix_state_dir = Path(os.environ.get("NIX_STATE_DIR", "/nix/var/nix"))
+    global_nix_profiles_dir = global_nix_state_dir.joinpath(
+        "profiles", "per-user", getpass.getuser()
+    )
+
+    user_state_home = Path(
+        os.environ.get("XDG_STATE_HOME", "~/.local/state")
+    ).expanduser()
+    user_nix_profiles_dir = user_state_home.joinpath("nix", "profiles")
+
+    return (
+        user_nix_profiles_dir
+        if user_nix_profiles_dir.exists()
+        else global_nix_profiles_dir
+    )
+
+
+def get_nix_profiles_root() -> Path:
+    return Path("/nix/var/nix/profiles")
+
+
+def get_re_compile(use_home: bool):
+    return re.compile(
+        r"home-manager-(?P<number>\d+)-link"
+        if use_home
+        else r"system-(?P<number>\d+)-link"
+    )
+
+
+def get_generations(use_home: bool) -> List[Generation]:
+    profile_regex = get_re_compile(use_home)
+    path = get_hm_profiles_root() if use_home else get_nix_profiles_root()
+    generation_list = []
+    for entry in path.iterdir():
+        result = profile_regex.search(str(entry))
+        if result:
+            version_number = int(result.groupdict()["number"])
+            real_path = entry.resolve()
+            created_at = datetime.fromtimestamp(os.path.getctime(real_path))
+
+            generation = Generation(
+                version=version_number, path=real_path, created_at=created_at
+            )
+
+            generation_list.append(generation)
+    generation_list = sorted(generation_list, key=lambda g: g.version, reverse=True)
+
+    return generation_list
+
+
+def get_current_generation(use_home: bool) -> Generation:
+    if use_home:
+        path = get_hm_profiles_root()
+        base_name = "home-manager"
+    else:
+        path = get_nix_profiles_root()
+        base_name = "system"
+    profile_regex = get_re_compile(use_home)
+    current_dir = str(path.joinpath(base_name).readlink())
+    if current_dir:
+        result = profile_regex.search(current_dir)
+        if result:
+            version_number = int(result.groupdict()["number"])
+            real_path = path.joinpath(current_dir)
+            created_at = datetime.fromtimestamp(os.path.getctime(real_path))
+            return Generation(
+                version=version_number, path=real_path, created_at=created_at
+            )
+
+
+def format_generation(generation: Generation) -> str:
+    format = "%Y-%m-%d %H:%M"
+    return f"create time: {generation.created_at.strftime(format)}, version: {generation.version}"
+
+
+def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation = None):
+    if not cmd.exists("nvd"):
+        return
+    if old_generation:
+        generation_first = old_generation
+        generation_second = get_current_generation(use_home)
+    else:
+        generations = get_generations(use_home)
+        if len(generations) < 2:
+            fmt.info("No previous data available")
+            return
+        else:
+            generation_first = generations[1]
+            generation_second = generations[0]
+    fmt.info(
+        f"Current build creation information is {format_generation(generation_first)}"
+    )
+    fmt.info(f"Previous build information is {format_generation(generation_second)}")
+    cmd.run(
+        ["nvd", "diff", str(generation_first.path), str(generation_second.path)],
+        dry_run=dry_run,
+    )
+
+
+### -----  end: display nix diff ------------------------------------
 class Gc:
     def __init__(
         self,
@@ -443,7 +556,10 @@ def bootstrap(
                 "backup",
             ]
         )
+        use_home = cfg == FlakeOutputs.HOME_MANAGER
+        old_generation = get_current_generation(use_home)
         cmd.run(cmd_list, dry_run=dry_run)
+        nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
     else:
         fmt.error("Could not infer system type.")
         raise typer.Abord()
@@ -479,7 +595,10 @@ def build(
     flags += ["--show-trace", "-L"] if debug else []
     flags += extra_args if extra_args else []
     cmd_list += [flake] + flags
+    use_home = cfg == FlakeOutputs.HOME_MANAGER
+    old_generation = get_current_generation(use_home)
     cmd.run(cmd_list, dry_run=dry_run)
+    nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
 
 
 @app.command(help="builds and activates the specified flake output")
@@ -517,7 +636,15 @@ def switch(
     flags += ["--show-trace", "-L"] if debug else []
     flags += extra_args if extra_args else []
     cmd_list = cmd_str.split() + flake + flags
+    use_home = cfg == FlakeOutputs.HOME_MANAGER
+    old_generation = get_current_generation(use_home)
     cmd.run(cmd_list, dry_run=dry_run)
+    nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
+
+
+@app.command(help="Showing different information for the two latest builds")
+def diff(home: bool = False, dry_run: bool = False):
+    nix_diff(use_home=home, dry_run=dry_run)
 
 
 @app.command(help="remove previously built configurations and symlinks from DOTFILES")
