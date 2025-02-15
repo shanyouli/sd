@@ -388,6 +388,24 @@ class Gc:
         cmd.run(["sudo", "nix", "store", "gc", "-v"], dry_run=self.dry_run)
 
 
+def nix_version_is_greater(v: str) -> bool:
+    current_version = [
+        int(i) for i in cmd.getout('nix --version | cut -d" " -f3').split(".")
+    ]
+    ver = [int(i) for i in v.split(".")]
+    v_len = len(ver)
+    c_len = len(current_version)
+    len_v = c_len if c_len <= v_len else v_len
+    r = False
+    for i in range(len_v):
+        if current_version[i] is not None and ver[i] < current_version[i]:
+            r = True
+    else:
+        if len_v != v_len:
+            r = True
+    return r
+
+
 @app.command(
     help="update all flake inputs or optionally specific flakes",
 )
@@ -457,9 +475,15 @@ def update(
     else:
         msg = "updating all flake inputs"
         flakes = flakes if flakes else all_flakes
-    inputs = [f"--update-input {input}" for input in flakes]
     fmt.info(f"updating {','.join(flakes)}" if msg is None else msg)
-    cmd.run(["nix", "flake", "lock"] + inputs + flags, dry_run=dry_run, shell=True)
+    is_greater_2_18 = nix_version_is_greater("2.18")
+    if is_greater_2_18:
+        cmd.run(
+            ["nix", "flake", "update"] + flakes + flags, dry_run=dry_run, shell=True
+        )
+    else:
+        inputs = [f"--update-input {input}" for input in flakes]
+        cmd.run(["nix", "flake", "lock"] + inputs + flags, dry_run=dry_run, shell=True)
 
 
 # HACK: When macos is updated it automatically generates new /etc/shells,
