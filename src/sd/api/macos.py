@@ -41,7 +41,10 @@ def alias(
     if target is None:
         if (
             path.is_file(source)
-            and cmd.run(f"file {source} | grep 'MacOS Alias file'").returncode == 0
+            and cmd.run(
+                f"file {source} | grep 'MacOS Alias file' >/dev/null"
+            ).returncode
+            == 0
         ):
             source_path = cmd.getout(f"""osascript <<EOF
 tell application "Finder"

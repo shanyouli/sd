@@ -59,12 +59,13 @@ def term_fmt_by_list(lst: List[str], space: int = 4, use_num: bool = True):
             if use_num
             else ""
         )
-        ceil_msg = typer.style(str_ljust(ceil_msg, ceil_size), fg=Colors.INFO.value)
         if (i + 1) % num == 0:
+            ceil_msg = typer.style(ceil_msg, fg=Colors.INFO.value)
             messages += f"{numstr}{sep_str}{ceil_msg}"
             typer.echo(messages)
             messages = ""
         else:
+            ceil_msg = typer.style(str_ljust(ceil_msg, ceil_size), fg=Colors.INFO.value)
             messages += f"{numstr}{sep_str}{ceil_msg}{split}"
 
 
@@ -96,14 +97,15 @@ def term_fmt_by_dict(
         )
         ceil_msg = typer.style(str_ljust(key_msg, keys_size), fg=Colors.INFO.value)
         dic_msg = typer.style(dic_sep, fg=Colors.WARN.value)
-        val_msg = typer.style(
-            str_ljust(str(dic[key_msg]), vals_size), fg=Colors.INFO.value
-        )
         if (i + 1) % num == 0:
+            val_msg = typer.style(str(dic[key_msg]), fg=Colors.INFO.value)
             messages += f"{numstr}{sep_str}{ceil_msg}{dic_msg}{val_msg}"
             typer.echo(messages)
             messages = ""
         else:
+            val_msg = typer.style(
+                str_ljust(str(dic[key_msg]), vals_size), fg=Colors.INFO.value
+            )
             messages += f"{numstr}{sep_str}{ceil_msg}{dic_msg}{val_msg}{split}"
 
 
