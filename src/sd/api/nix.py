@@ -623,8 +623,10 @@ def build(
     cmd_list += [flake] + flags
     use_home = cfg == FlakeOutputs.HOME_MANAGER
     old_generation = get_current_generation(use_home)
-    cmd.run(cmd_list, dry_run=dry_run)
-    nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
+    result_out = cmd.run(cmd_list, dry_run=dry_run)
+    show_diff = dry_run if dry_run else result_out.returncode == 0
+    if show_diff:
+        nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
 
 
 @app.command(help="builds and activates the specified flake output")
@@ -665,10 +667,14 @@ def switch(
     use_home = cfg == FlakeOutputs.HOME_MANAGER
     old_generation = get_current_generation(use_home)
     hm_generation = get_current_generation(True)
-    cmd.run(cmd_list, dry_run=dry_run)
-    nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
-    if old_generation != hm_generation:
-        nix_diff(use_home=(not use_home), dry_run=dry_run, old_generation=hm_generation)
+    result_out = cmd.run(cmd_list, dry_run=dry_run)
+    show_diff = dry_run if dry_run else result_out.returncode == 0
+    if show_diff:
+        nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
+        if old_generation != hm_generation:
+            nix_diff(
+                use_home=(not use_home), dry_run=dry_run, old_generation=hm_generation
+            )
 
 
 @app.command(help="Showing different information for the two latest builds")
