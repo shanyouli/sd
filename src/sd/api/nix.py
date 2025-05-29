@@ -459,7 +459,7 @@ def update(
                     f"The flake({i}) does not exist, please check all_flake or update it."
                 )
                 fmt.error(
-                    f'Currently supported input-flakes are: {" ".join(all_flakes)}'
+                    f"Currently supported input-flakes are: {' '.join(all_flakes)}"
                 )
                 raise typer.Abort()
     all_flakes = (
@@ -557,7 +557,7 @@ def bootstrap(
         nix = "nix" if cmd.exists("nix") else "/nix/var/nix/profiles/default/bin/nix"
         cmd.run([nix, "build", flake] + flags, dry_run=dry_run)
         cmd.run(
-            f"./result/sw/bin/darwin-rebuild switch --flake {bootstrap_flake}#{host}".split(),
+            f"sudo ./result/sw/bin/darwin-rebuild switch --flake {bootstrap_flake}#{host}".split(),
             dry_run=dry_run,
         )
     elif cfg == FlakeOutputs.HOME_MANAGER:
@@ -610,7 +610,7 @@ def build(
     elif cfg == FlakeOutputs.NIXOS:
         cmd_list = ["sudo", "nixos-rebuild", "build", "--flake"]
     elif cfg == FlakeOutputs.DARWIN:
-        cmd_list = ["darwin-rebuild", "build", "--flake"]
+        cmd_list = ["sudo", "darwin-rebuild", "build", "--flake"]
     elif cfg == FlakeOutputs.HOME_MANAGER:
         cmd_list = ["home-manager", "build", "--flake"]
     else:
@@ -653,7 +653,7 @@ def switch(
         cmd_str = "sudo nixos-rebuild switch --flake"
     elif cfg == FlakeOutputs.DARWIN:
         shell_backup()
-        cmd_str = "darwin-rebuild switch --flake"
+        cmd_str = "sudo darwin-rebuild switch --flake"
     elif cfg == FlakeOutputs.HOME_MANAGER:
         cmd_str = "home-manager switch --flake"
     else:
