@@ -442,13 +442,14 @@ def update(
     # it should be used to get it by using the flake.lock file,
     # if the inputs.flake has been modified, you can use the nix-flake command to update the lock.
     all_flakes = get_flake_inputs_by_lock()
-    ignore_inputs = ["nixos-stable", "darwin-stable", "darwin"]
+    ignore_inputs = ["nixos-stable", "darwin-stable", "darwin", "home-manager"]
     msg = None
     if flake:
         for i in flake:
             if i in all_flakes:
                 flakes.append(i)
             elif i == "stable":
+                flakes.append("home-manager")
                 if ISMAC:
                     flakes.append("darwin-stable")
                     flakes.append("darwin")
