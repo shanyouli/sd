@@ -241,7 +241,12 @@ def format_generation(generation: Generation) -> str:
 
 
 def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation = None):
-    if not cmd.exists("nvd"):
+    use_dix = 0
+    if cmd.exists("dix"):
+        use_dix = 1
+    elif cmd.exists("nvd"):
+        use_dix = 2
+    else:
         return
     if old_generation:
         generation_first = old_generation
@@ -258,10 +263,16 @@ def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation = None):
         f"Previous build creation information {format_generation(generation_first)}"
     )
     fmt.info(f"Current build information {format_generation(generation_second)}")
-    cmd.run(
-        ["nvd", "diff", str(generation_first.path), str(generation_second.path)],
-        dry_run=dry_run,
-    )
+    if use_dix == 1:
+        cmd.run(
+            ["dix", str(generation_first.path), str(generation_second.path)],
+            dry_run=dry_run,
+        )
+    else:
+        cmd.run(
+            ["nvd", "diff", str(generation_first.path), str(generation_second.path)],
+            dry_run=dry_run,
+        )
 
 
 ### -----  end: display nix diff ------------------------------------
