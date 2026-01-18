@@ -10,7 +10,7 @@ def run(
     shell: bool = False,
     show: bool = False,
     dry_run: bool = False,
-) -> subprocess.CompletedProcess[str]:
+) -> subprocess.CompletedProcess | None:
     if isinstance(cmd_list, str):
         shell = True
         cmd_str = cmd_list
@@ -27,11 +27,13 @@ def run(
 
 
 def exists(cmd_str: str) -> bool:
-    return run(["env", "type", cmd_str], capture_output=True).returncode == 0
+    r = run(["env", "type", cmd_str], capture_output=True)
+    return r.returncode == 0 if r else False
 
 
 def test(cmd_list: List[str]) -> bool:
-    return run(cmd_list).returncode == 0
+    result = run(cmd_list)
+    return result.returncode == 0 if result else False
 
 
 def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) -> str:
@@ -46,7 +48,24 @@ def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) ->
             raise subprocess.SubprocessError(result)
     else:
         process = run(cmd_str, capture_output=True, shell=shell, show=show)
-        if process.returncode == 0:
+        if process and process.returncode == 0:
             return process.stdout.decode().strip()
         else:
-            raise subprocess.SubprocessError(process.stdout.decode().strip())
+            raise subprocess.SubprocessError(
+                process.stdout.decode().strip() if process else ""
+            )
+
+
+def get_latest_tag_by_git(repo_url) -> str | None:
+    try:
+        cmd = ["git", "ls-remote", "--tags", "--sort=v:refname", repo_url]
+        result = getout(cmd)
+        if result:
+            lines = result.splitlines()
+            if not lines:
+                return None
+            latest_line = [line for line in lines if not line.endswith("^{}")][-1]
+            return latest_line.split("/")[-1]
+    except subprocess.CalledProcessError as e:
+        print(f"执行错误: {e}")
+        return None

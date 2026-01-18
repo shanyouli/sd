@@ -77,7 +77,7 @@ def get_flake(current_dir: bool = False) -> str:
         return REMOTE_FLAKE
 
 
-def get_flake_inputs_by_lock(flake_path: Path = None):
+def get_flake_inputs_by_lock(flake_path: Path | None | str = None):
     flake_path = os.getcwd() if flake_path is None else flake_path
     flake_lock = os.path.join(os.path.realpath(flake_path), "flake.lock")
     data_json = path.json_read(flake_lock)
@@ -91,7 +91,7 @@ def get_flake_inputs_by_lock(flake_path: Path = None):
         raise typer.Abort()
 
 
-def get_flake_inputs_by_nix(flake_path: Path = None):
+def get_flake_inputs_by_nix(flake_path: Path | None | str = None):
     flake_path = os.getcwd() if flake_path is None else flake_path
     if path.is_file(os.path.join(os.path.realpath(flake_path), "flake.lock")):
         flake_json_text = cmd.getout(
@@ -215,7 +215,7 @@ def get_generations(use_home: bool) -> List[Generation]:
     return generation_list
 
 
-def get_current_generation(use_home: bool) -> Generation:
+def get_current_generation(use_home: bool) -> Generation | None:
     if use_home:
         path = get_hm_profiles_root()
         base_name = "home-manager"
@@ -223,6 +223,8 @@ def get_current_generation(use_home: bool) -> Generation:
         path = get_nix_profiles_root()
         base_name = "system"
     profile_regex = get_re_compile(use_home)
+    if not path.joinpath(base_name).exists():
+        return None
     current_dir = str(path.joinpath(base_name).readlink())
     if current_dir:
         result = profile_regex.search(current_dir)
@@ -240,7 +242,7 @@ def format_generation(generation: Generation) -> str:
     return f"create time: {generation.created_at.strftime(format)}, version: {generation.version}"
 
 
-def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation = None):
+def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation | None = None):
     use_dix = 0
     if cmd.exists("dix"):
         use_dix = 1
@@ -253,7 +255,7 @@ def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation = None):
         generation_second = get_current_generation(use_home)
     else:
         generations = get_generations(use_home)
-        if len(generations) < 2:
+        if generations is None or len(generations) < 2:
             fmt.info("No previous data available")
             return
         else:
@@ -399,10 +401,17 @@ class Gc:
         cmd.run(["sudo", "nix", "store", "gc", "-v"], dry_run=self.dry_run)
 
 
+def nix_version_str() -> str:
+    """获取当前 nix version"""
+    return cmd.getout(["nix", "--version"]).splitlines()[0].split()[-1]
+
+
+def nix_is_lix() -> bool:
+    return cmd.getout(["nix", "--version"]).splitlines()[0].find("Lix") != -1
+
+
 def nix_version_is_greater(v: str) -> bool:
-    current_version = [
-        int(i) for i in cmd.getout('nix --version | cut -d" " -f3').split(".")
-    ]
+    current_version = [int(i) for i in nix_version_str().split(".")]
     ver = [int(i) for i in v.split(".")]
     v_len = len(ver)
     c_len = len(current_version)
@@ -415,6 +424,97 @@ def nix_version_is_greater(v: str) -> bool:
         if len_v != v_len:
             r = True
     return r
+
+
+def nix_install_profiles(dry_run: bool = True):
+    nix_profile = "/nix/var/nix/profiles/default"
+    nix_version_line = cmd.getout(["nix", "--version"]).splitlines()[0]
+    lix_latest_tag = cmd.get_latest_tag_by_git(
+        "https://git.lix.systems/lix-project/lix"
+    )
+    extra_lix_args = [
+        "--extra-substituters",
+        "https://cache.lix.systems",
+        "--extra-trusted-public-keys",
+        "cache.lix.systems:aBnZUw8zA7H35Cz2RyKFVs3H4PlGTLawyY5KRbvJR8o=",
+    ]
+    base_run_cmd: list[str] = [
+        "nix",
+        "run",
+        "--experimental-features",
+        '"nix-command flakes"',
+    ] + extra_lix_args
+    base_cmd: list[str] = [
+        "sudo",
+        "nix",
+        "upgrade-nix",
+        "--profile",
+        nix_profile,
+        "--keep-outputs",
+        "--keep-derivations",
+        "--experimental-features",
+        '"nix-command flakes"',
+    ]
+    if os.path.exists(os.path.join(nix_profile, "bin", "nix")):
+        if nix_version_line.find("Lix") != -1:
+            nix_versions = nix_version_line.split()[-1]
+            if lix_latest_tag is not None and nix_versions != lix_latest_tag:
+                cmd.run(
+                    ["sudo", "-H", "--preserve-env=SSH+AUTH_SOCK"]
+                    + base_run_cmd
+                    + [
+                        f"'git+https://git.lix.systems/lix-project/lix?ref=refs/tags/{lix_latest_tag}'",
+                        "--",
+                        "upgrade-nix",
+                        "--porfile",
+                        nix_profile,
+                    ]
+                    + extra_lix_args,
+                    dry_run=dry_run,
+                    shell=True,
+                )
+            else:
+                cmd.run(base_cmd + extra_lix_args, dry_run=dry_run, shell=True)
+        elif lix_latest_tag is not None:
+            _path = f"{os.path.join(nix_profile, 'bin')}:$PATH"
+            cmd.run(
+                [
+                    ("PATH='%s'" % _path),
+                    "sudo",
+                    "-H",
+                    "--preserve-env=SSH+AUTH_SOCK",
+                    "--preserve-env=PATH",
+                ]
+                + base_run_cmd
+                + extra_lix_args,
+                dry_run=dry_run,
+                shell=True,
+            )
+        else:
+            cmd.run(base_cmd, dry_run=dry_run, shell=True)
+    else:
+        cmd.run(
+            [
+                "sudo",
+                "-H",
+                "--preserve-env=SSH_AUTH_SOCK",
+                "nix",
+                "profile",
+                "install",
+                "--profile",
+                nix_profile,
+                (
+                    f"git+https://git.lix.systems/lix-project/lix?ref=refs/tags/{lix_latest_tag}"
+                    if lix_latest_tag
+                    else "git+https://git.lix.systems/lix-project/lix"
+                ),
+                "--priority",
+                "3",
+            ]
+            + extra_lix_args,
+            dry_run=dry_run,
+            shell=True,
+        )
 
 
 @app.command(
@@ -566,8 +666,15 @@ def bootstrap(
     elif cfg == FlakeOutputs.DARWIN:
         shell_backup()
         flake = f"{bootstrap_flake}#{cfg.value}.{host}.config.system.build.toplevel"
+        if os.path.exists("/nix/var/nix/profiles/default/bin/nix"):
+            nix = "/nix/var/nix/profiles/default/bin/nix"
+        elif cmd.exists("nix"):
+            nix = "nix"
+        else:
+            nix_install_profiles(dry_run)
+            nix = "/nix/var/nix/profiles/default/bin/nix"
         nix = "nix" if cmd.exists("nix") else "/nix/var/nix/profiles/default/bin/nix"
-        cmd.run([nix, "build", flake] + flags, dry_run=dry_run)
+        cmd.run([nix, "build", flake] + flags, dry_run=dry_run, shell=True)
         cmd.run(
             f"sudo ./result/sw/bin/darwin-rebuild switch --flake {bootstrap_flake}#{host}".split(),
             dry_run=dry_run,
@@ -782,21 +889,8 @@ def init(
         raise typer.Abort()
     nixgc = Gc(dry_run=dry_run, default="default")
     nixgc.clear_remove_default()
-    cmd.run(
-        [
-            "sudo",
-            "nix",
-            "upgrade-nix",
-            "-p",
-            "/nix/var/nix/profiles/default",
-            "--keep-outputs",
-            "--keep-derivations",
-            "--experimental-features",
-            '"nix-command flakes"',
-        ],
-        dry_run=dry_run,
-    )
     # sudo nix upgrade-nix -p /nix/var/nix/profiles/default
+    nix_install_profiles(dry_run)
     nixgc.clear_remove_default(True)
     nixgc.run()
     bootstrap(host=host, darwin=True, remote=False, extra_args=None, dry_run=dry_run)
