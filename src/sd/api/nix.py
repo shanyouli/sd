@@ -27,7 +27,7 @@ DOTFILES = Dotfiles().value
 NIX_PROFILES = (
     Path(os.environ.get("NIX_STATE_HOME", "/nix/var/nix"))
     .expanduser()
-    .joinpath("nix", "profiles")
+    .joinpath("profiles")
 )
 NIX_USER_PROFILES = (
     Path(os.environ.get("XDG_STATE_HOME", "~/.local/state"))
