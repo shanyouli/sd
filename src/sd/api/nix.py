@@ -1,3 +1,4 @@
+import subprocess
 import getpass
 import json
 import os
@@ -23,6 +24,16 @@ from sd.utils.enums import (
 from typer._completion_shared import Shells
 
 DOTFILES = Dotfiles().value
+NIX_PROFILES = (
+    Path(os.environ.get("NIX_STATE_HOME", "/nix/var/nix"))
+    .expanduser()
+    .joinpath("nix", "profiles")
+)
+NIX_USER_PROFILES = (
+    Path(os.environ.get("XDG_STATE_HOME", "~/.local/state"))
+    .expanduser()
+    .joinpath("nix", "profiles")
+)
 
 app = typer.Typer(
     add_completion=False, no_args_is_help=True
@@ -165,25 +176,14 @@ class Generation:
 
 def get_hm_profiles_root() -> Path:
     # A copy of https://github.com/nix-community/home-manager/blob/f1490b8/home-manager/home-manager#L119-L140
-    global_nix_state_dir = Path(os.environ.get("NIX_STATE_DIR", "/nix/var/nix"))
-    global_nix_profiles_dir = global_nix_state_dir.joinpath(
-        "profiles", "per-user", getpass.getuser()
-    )
-
-    user_state_home = Path(
-        os.environ.get("XDG_STATE_HOME", "~/.local/state")
-    ).expanduser()
-    user_nix_profiles_dir = user_state_home.joinpath("nix", "profiles")
+    global_nix_profiles_dir = NIX_PROFILES.joinpath(getpass.getuser())
+    user_nix_profiles_dir = NIX_USER_PROFILES
 
     return (
         user_nix_profiles_dir
         if user_nix_profiles_dir.exists()
         else global_nix_profiles_dir
     )
-
-
-def get_nix_profiles_root() -> Path:
-    return Path("/nix/var/nix/profiles")
 
 
 def get_re_compile(use_home: bool):
@@ -196,7 +196,7 @@ def get_re_compile(use_home: bool):
 
 def get_generations(use_home: bool) -> List[Generation]:
     profile_regex = get_re_compile(use_home)
-    path = get_hm_profiles_root() if use_home else get_nix_profiles_root()
+    path = get_hm_profiles_root() if use_home else NIX_PROFILES
     generation_list = []
     for entry in path.iterdir():
         result = profile_regex.search(str(entry))
@@ -220,7 +220,7 @@ def get_current_generation(use_home: bool) -> Generation | None:
         path = get_hm_profiles_root()
         base_name = "home-manager"
     else:
-        path = get_nix_profiles_root()
+        path = NIX_PROFILES
         base_name = "system"
     profile_regex = get_re_compile(use_home)
     if not path.joinpath(base_name).exists():
@@ -253,6 +253,8 @@ def nix_diff(use_home: bool, dry_run: bool, old_generation: Generation | None = 
     if old_generation:
         generation_first = old_generation
         generation_second = get_current_generation(use_home)
+        if generation_second is None:
+            return
     else:
         generations = get_generations(use_home)
         if generations is None or len(generations) < 2:
@@ -295,12 +297,20 @@ class Gc:
         self.profiles = [
             i
             for i in [
-                "/nix/var/nix/profiles",
-                os.path.expanduser("~/.local/state/nix/profiles"),
+                NIX_PROFILES,
+                NIX_USER_PROFILES,
             ]
-            if path.is_dir(i)
+            if i.is_dir()
         ]
-        self.gc_autos = [i for i in ["/nix/var/nix/gcroots/auto"] if path.is_dir(i)]
+        self.gc_autos = [
+            i
+            for i in [
+                Path(os.environ.get("NIX_STATE_HOME", "/nix/var/nix"))
+                .expanduser()
+                .joinpath("gcroots", "auto")
+            ]
+            if i.is_dir()
+        ]
         self.default = default
 
     def remove_from_link_list(self):
@@ -427,7 +437,8 @@ def nix_version_is_greater(v: str) -> bool:
 
 
 def nix_install_profiles(dry_run: bool = True):
-    nix_profile = "/nix/var/nix/profiles/default"
+    nix_profile = NIX_PROFILES.joinpath("default")
+    nix_profile_str = nix_profile.as_posix()
     nix_version_line = cmd.getout(["nix", "--version"]).splitlines()[0]
     lix_latest_tag = cmd.get_latest_tag_by_git(
         "https://git.lix.systems/lix-project/lix"
@@ -449,7 +460,7 @@ def nix_install_profiles(dry_run: bool = True):
         "nix",
         "upgrade-nix",
         "--profile",
-        nix_profile,
+        nix_profile_str,
         "--keep-outputs",
         "--keep-derivations",
         "--experimental-features",
@@ -467,7 +478,7 @@ def nix_install_profiles(dry_run: bool = True):
                         "--",
                         "upgrade-nix",
                         "--porfile",
-                        nix_profile,
+                        nix_profile_str,
                     ]
                     + extra_lix_args,
                     dry_run=dry_run,
@@ -476,7 +487,7 @@ def nix_install_profiles(dry_run: bool = True):
             else:
                 cmd.run(base_cmd + extra_lix_args, dry_run=dry_run, shell=True)
         elif lix_latest_tag is not None:
-            _path = f"{os.path.join(nix_profile, 'bin')}:$PATH"
+            _path = f"{nix_profile.joinpath('bin').as_posix()}:$PATH"
             cmd.run(
                 [
                     ("PATH='%s'" % _path),
@@ -502,7 +513,7 @@ def nix_install_profiles(dry_run: bool = True):
                 "profile",
                 "install",
                 "--profile",
-                nix_profile,
+                nix_profile_str,
                 (
                     f"git+https://git.lix.systems/lix-project/lix?ref=refs/tags/{lix_latest_tag}"
                     if lix_latest_tag
@@ -666,26 +677,29 @@ def bootstrap(
     elif cfg == FlakeOutputs.DARWIN:
         shell_backup()
         flake = f"{bootstrap_flake}#{cfg.value}.{host}.config.system.build.toplevel"
-        if os.path.exists("/nix/var/nix/profiles/default/bin/nix"):
-            nix = "/nix/var/nix/profiles/default/bin/nix"
-        elif cmd.exists("nix"):
+        nix_default_bin = NIX_PROFILES.joinpath("default", "bin", "nix")
+        if cmd.exists("nix"):
             nix = "nix"
+        elif nix_default_bin.exists():
+            nix = nix_default_bin.as_posix()
         else:
-            nix_install_profiles(dry_run)
-            nix = "/nix/var/nix/profiles/default/bin/nix"
-        nix = "nix" if cmd.exists("nix") else "/nix/var/nix/profiles/default/bin/nix"
-        cmd.run([nix, "build", flake] + flags, dry_run=dry_run, shell=True)
-        cmd.run(
-            f"sudo ./result/sw/bin/darwin-rebuild switch --flake {bootstrap_flake}#{host}".split(),
-            dry_run=dry_run,
-        )
+            fmt.error("Please install nix.")
+            raise typer.Abort()
+        cmd_result = cmd.run([nix, "build", flake] + flags, dry_run=dry_run, shell=True)
+        if cmd_result is None or cmd_result.returncode == 0:
+            cmd.run(
+                f"sudo ./result/sw/bin/darwin-rebuild switch --flake {bootstrap_flake}#{host}".split(),
+                dry_run=dry_run,
+            )
+        else:
+            raise subprocess.SubprocessError(cmd_result)
     elif cfg == FlakeOutputs.HOME_MANAGER:
         try:
             from sd.api.macos import diskSetup
 
             diskSetup()
         except ModuleNotFoundError as e:
-            fmt.error(e)
+            fmt.error(str(e))
         flake = f"{bootstrap_flake}#{host}"
         cmd_list = (
             ["nix", "run"]
@@ -743,8 +757,7 @@ def build(
     use_home = cfg == FlakeOutputs.HOME_MANAGER
     old_generation = get_current_generation(use_home)
     result_out = cmd.run(cmd_list, dry_run=dry_run)
-    show_diff = dry_run if dry_run else result_out.returncode == 0
-    if show_diff:
+    if dry_run or (result_out and result_out.returncode == 0):
         nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
 
 
@@ -787,8 +800,7 @@ def switch(
     old_generation = get_current_generation(use_home)
     hm_generation = get_current_generation(True)
     result_out = cmd.run(cmd_list, dry_run=dry_run)
-    show_diff = dry_run if dry_run else result_out.returncode == 0
-    if show_diff:
+    if dry_run or (result_out and result_out.returncode == 0):
         nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
         if old_generation != hm_generation:
             nix_diff(
@@ -869,8 +881,8 @@ def gc(
     # only: bool = typer.Option(False, help='Keep only one build'),
 ):
     if delete_older_than:
-        cmd = f"nix-collect-garbage --delete-older-then {delete_older_than} {'--dry-run' if dry_run else ''}"
-        cmd.run(["sudo"] + cmd.split(), dry_run=dry_run)
+        base_cmd = f"nix-collect-garbage --delete-older-then {delete_older_than} {'--dry-run' if dry_run else ''}"
+        cmd.run(["sudo"] + base_cmd.split(), dry_run=dry_run)
     else:
         nix_gc = Gc(dry_run=dry_run, save_num=save)
         nix_gc.gc_clear_list()
