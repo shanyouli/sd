@@ -7,6 +7,9 @@ from sd.api import env, launchctl, macbid, macos, nix
 from sd.utils import cmd
 from sd.utils.enums import ISMAC
 
+import typer.completion
+from typer._completion_shared import Shells
+
 SYSAPP = None
 if (
     cmd.exists("nixos-rebuild")
@@ -17,29 +20,28 @@ if (
     SYSAPP = "nix"
 
 else:
-    import typer.completion
-    from typer._completion_shared import Shells
-
     app = typer.Typer(
         add_completion=False, no_args_is_help=True
     )  # add_completion 为 True 时表示使用默认补全
-    app_completion = typer.Typer(
-        help="Generate and install completion scripts.", hidden=True
-    )
-    app.add_typer(app_completion, name="completion")
+app_completion = typer.Typer(
+    help="Generate and install completion scripts.", hidden=True
+)
+app.add_typer(app_completion, name="completion")
 
-    @app_completion.command(
-        no_args_is_help=True,
-        help="Show completion for the specified shell, to copy or customize it.",
-    )
-    def show(ctx: typer.Context, shell: Shells) -> None:
-        typer.completion.show_callback(ctx, None, shell)
 
-    @app_completion.command(
-        no_args_is_help=True, help="Install completion for the specified shell."
-    )
-    def install(ctx: typer.Context, shell: Shells) -> None:
-        typer.completion.install_callback(ctx, None, shell)
+@app_completion.command(
+    no_args_is_help=True,
+    help="Show completion for the specified shell, to copy or customize it.",
+)
+def show(ctx: typer.Context, shell: Shells) -> None:
+    typer.completion.show_callback(ctx, None, shell)
+
+
+@app_completion.command(
+    no_args_is_help=True, help="Install completion for the specified shell."
+)
+def install(ctx: typer.Context, shell: Shells) -> None:
+    typer.completion.install_callback(ctx, None, shell)
 
 
 app.add_typer(
