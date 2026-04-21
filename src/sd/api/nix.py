@@ -88,18 +88,20 @@ def get_flake(current_dir: bool = False) -> str:
         return REMOTE_FLAKE
 
 
-def get_flake_inputs_by_lock(flake_path: Path | None | str = None):
+def get_flake_inputs_by_lock(flake_path: Path | None | str = None) -> list[str]:
     flake_path = os.getcwd() if flake_path is None else flake_path
     flake_lock = os.path.join(os.path.realpath(flake_path), "flake.lock")
     data_json = path.json_read(flake_lock)
     if data_json:
         try:
-            return [i for i in data_json["nodes"]["root"]["inputs"].keys()]
-        except KeyError as er:
+            nodes: dict = data_json.get("nodes", {})
+            root: dict = nodes.get("root", {})
+            inputs: dict = root.get("inputs", {})
+            return list(inputs.keys())
+        except (KeyError, AttributeError) as er:
             raise er
-    else:
-        fmt.error(f"Failed to read data from {flake_lock} file")
-        raise typer.Abort()
+    fmt.error(f"Failed to read data from {flake_lock} file")
+    raise typer.Abort()
 
 
 def get_flake_inputs_by_nix(flake_path: Path | None | str = None):
@@ -670,7 +672,7 @@ def bootstrap(
         return
     if cfg is None:
         fmt.error("Missing configuration")
-        raise typer.Abord()
+        raise typer.Abort()
     elif cfg == FlakeOutputs.NIXOS:
         fmt.error("Bootstrap does not apply to nixos system.")
         raise typer.Abort()
@@ -721,7 +723,7 @@ def bootstrap(
         nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
     else:
         fmt.error("Could not infer system type.")
-        raise typer.Abord()
+        raise typer.Abort()
 
 
 @app.command(help="builds the specified flake output")

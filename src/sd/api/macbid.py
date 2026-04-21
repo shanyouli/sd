@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
-from typing import List, Union
 from subprocess import SubprocessError
 import typer
 from sd.utils import cmd, fmt, path
 from sd.utils.fmt import term_fmt_by_dict
+from sd.utils.path import PathLink
 
 app = typer.Typer()
 
@@ -13,7 +13,6 @@ APP_PATH = [
     os.path.expanduser("~/Applications"),
     "/System/Applications",
 ]
-PathLink = Union[str, bytes, Path]
 
 
 def get_app_list_by_path(p: PathLink) -> dict[str, str]:
@@ -37,45 +36,47 @@ def get_app_list_by_path(p: PathLink) -> dict[str, str]:
     return app_list
 
 
-def get_app_list_by_list(paths: List[PathLink]) -> dict[str, str]:
+def get_app_list_by_list(paths: list[str | Path]) -> dict[str, str]:
     app_lists = [get_app_list_by_path(i) for i in paths if path.is_dir(i)]
     return {k: v for i in app_lists for k, v in i.items()}
 
 
 def get_app_bundleid_by_appname(app_name: str) -> str:
-    "获取app的Bundle ID"
     return cmd.getout(f"osascript -e 'id of app \"{app_name}\"'")
 
 
-def get_app_bundleid_by_info(f: PathLink) -> str:
-    p = os.path.join(f, "Contents", "Info.plist")
+def get_app_bundleid_by_info(f: PathLink) -> str | None:
+    p = Path(f) / "Contents" / "Info.plist"
     if path.is_exist(p):
         try:
             import plistlib
 
-            pl = plistlib.loads(Path(p).read_bytes())
-            return pl.get("CFBundleIdentifier")
+            pl = plistlib.loads(p.read_bytes())
+            bundle_id: str | None = pl.get("CFBundleIdentifier")
+            return bundle_id
         except ModuleNotFoundError as e:
-            fmt.error(e)
+            fmt.error(str(e))
+    return None
 
 
 def get_app_bundleid_by_path(p: PathLink) -> str:
     "获取 路径的 bundle ip， 该路径必须是app程序"
     bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r '{p}'")
-    if (
-        bundleid == "(null)"
-        and cmd.run(f"file {p} | grep 'MacOS Alias file' >/dev/null").returncode == 0
-    ):
+    run_result = cmd.run(f"file {p} | grep 'MacOS Alias file' >/dev/null")
+    if bundleid == "(null)" and run_result and run_result.returncode == 0:
         try:
             from sd.api.macos import alias
 
-            p = alias(p, None)
+            p_str = str(p)
+            p_alias = alias(p_str, None)
             # mdls -name 不支持 /nix/store/ 下文件
-            if not p.startswith("/nix/store"):
-                bundleid = cmd.getout(f"mdls -name kMDItemCFBundleIdentifier -r '{p}'")
+            if p_alias and not p_alias.startswith("/nix/store"):
+                bundleid = cmd.getout(
+                    f"mdls -name kMDItemCFBundleIdentifier -r '{p_alias}'"
+                )
         except (ModuleNotFoundError, SubprocessError) as e:
             bundleid = "(null)"
-            fmt.error(e)
+            fmt.error(str(e))
     if bundleid == "(null)":
         bundleid = get_app_bundleid_by_info(p)
         if bundleid:

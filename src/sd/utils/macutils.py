@@ -5,11 +5,12 @@ from tempfile import mkdtemp
 from sd.utils import cmd, fmt, path
 
 
-def init_app(target_path: Path, appname: str = None, force: bool = False):
-    target_app = (
-        target_path if target_path.suffix == ".app" else target_path.joinpath(appname)
-    )
-    fmt.info(force)
+def init_app(target_path: Path, appname: str | None = None, force: bool = False):
+    if target_path.suffix == ".app":
+        target_app = target_path
+    else:
+        target_app = target_path / appname if appname else target_path
+    fmt.info(str(force))
     if target_app.exists():
         if force:
             fmt.warn("Target app already exists and will be deleted")

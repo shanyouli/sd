@@ -36,56 +36,57 @@ def syncapps(
 def alias(
     source: str = typer.Argument(None, help="source paths"),
     target: str = typer.Argument(None, help="alias target path."),
-):
-    source = path.abspath(source)
+) -> str:
+    source_path: Path = path.abspath(source)
     if target is None:
         if (
-            path.is_file(source)
+            path.is_file(source_path)
             and cmd.run(
-                f"file {source} | grep 'MacOS Alias file' >/dev/null"
+                f"file {source_path} | grep 'MacOS Alias file' >/dev/null"
             ).returncode
             == 0
         ):
-            source_path = cmd.getout(f"""osascript <<EOF
+            source_path_str = cmd.getout(f"""osascript <<EOF
 tell application "Finder"
-    set theItem to (POSIX file "{source}") as alias
+    set theItem to (POSIX file "{source_path}") as alias
     if the kind of theItem is "alias" then
         get the POSIX path of ((original item of theItem) as text)
     end if
 end tell
 EOF
             """)
-            fmt.info(f"The alias for file {source} is {source_path}")
-            return source_path
+            fmt.info(f"The alias for file {source_path} is {source_path_str}")
+            return source_path_str
         else:
-            fmt.error(f"{source} Not an alias file")
-            return source
-    target = path.abspath(target)
+            fmt.error(f"{source_path} Not an alias file")
+            return str(source_path)
+    target_path: Path = path.abspath(target)
 
     if not path.is_exist(source):
         fmt.error(f"Please Confirm the existence of path {source}.")
         raise typer.Abort()
 
-    if path.is_exist(target):
+    if path.is_exist(target_path):
         fmt.error(
-            f"{target} is exist, Overwriting operations are not allowed, resulting in the loss of important files."
+            f"{target_path} is exist, Overwriting operations are not allowed, resulting in the loss of important files."
         )
         raise typer.Abort()
-    target_parent = path.get_parent(target).as_posix()
+    target_parent = path.get_parent(target_path).as_posix()
     path.mkdir(target_parent)
-    fmt.info(f"make alias from {source} to {target}")
+    fmt.info(f"make alias from {source_path} to {target_path}")
     if cmd.exists("mkalias"):
-        cmd.run(["mkalias", source, target])
+        cmd.run(["mkalias", str(source_path), str(target_path)])
     else:
         cmd.run(f"""osascript <<EOF
 tell application "Finder"
-    set originalPath to POSIX file "{source}"
+    set originalPath to POSIX file "{source_path}"
     set aliasPath to POSIX file "{target_parent}"
     make alias file to originalPath at aliasPath
-    set name of result to "{Path(target).name}"
+    set name of result to "{Path(target_path).name}"
 end tell
 EOF
         """)
+    return ""
 
 
 @app.command(help="Docker restart")
@@ -162,11 +163,12 @@ def proxy(url: str = typer.Option("", help="proxy url")):
         )
     with tempfile.NamedTemporaryFile(delete=False) as fb:
         fb.write(plistlib.dumps(pl))
-        cmd.run(["sudo", "mv", "-f", fb.name, NIX_DAEMON_PLIST._str], show=True)
-        cmd.run(["sudo", "chmod", "444", NIX_DAEMON_PLIST._str], show=True)
-        cmd.run(["sudo", "chown", "-R", "root", NIX_DAEMON_PLIST._str], show=True)
-        cmd.run(["sudo", "launchctl", "unload", "-w", NIX_DAEMON_PLIST._str], show=True)
-        cmd.run(["sudo", "launchctl", "load", "-w", NIX_DAEMON_PLIST._str], show=True)
+        plist_path = str(NIX_DAEMON_PLIST)
+        cmd.run(["sudo", "mv", "-f", fb.name, plist_path], show=True)
+        cmd.run(["sudo", "chmod", "444", plist_path], show=True)
+        cmd.run(["sudo", "chown", "-R", "root", plist_path], show=True)
+        cmd.run(["sudo", "launchctl", "unload", "-w", plist_path], show=True)
+        cmd.run(["sudo", "launchctl", "load", "-w", plist_path], show=True)
 
 
 if __name__ == "__main__":

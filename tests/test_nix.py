@@ -194,3 +194,100 @@ class TestNixVersion:
         mock_cmd.getout.return_value = "nix (Nix) 2.10.0"
         result = nix_version_is_greater("2.18")
         assert result is False
+
+
+class TestFlakeInputsEdgeCases:
+    @patch("sd.api.nix.path")
+    def test_get_flake_inputs_by_lock_empty_data(self, mock_path):
+        from sd.api.nix import get_flake_inputs_by_lock
+
+        mock_path.json_read.return_value = None
+        with patch("sd.api.nix.typer"):
+            with pytest.raises(Exception):
+                get_flake_inputs_by_lock("/test/path")
+
+    @patch("sd.api.nix.path")
+    def test_get_flake_inputs_by_lock_missing_nodes(self, mock_path):
+        from sd.api.nix import get_flake_inputs_by_lock
+
+        mock_path.json_read.return_value = {}
+        with patch("sd.api.nix.typer"):
+            with pytest.raises(Exception):
+                get_flake_inputs_by_lock("/test/path")
+
+
+class TestFlakePlatformMore:
+    @patch("sd.api.nix.cmd")
+    def test_get_flake_platform_home_manager(self, mock_cmd):
+        from sd.api.nix import get_flake_platform, FlakeOutputs
+
+        mock_cmd.exists.return_value = False
+        with patch("sd.api.nix.ISMAC", False):
+            result = get_flake_platform()
+            assert result == FlakeOutputs.HOME_MANAGER
+
+
+class TestGetHmProfilesRoot:
+    @patch("sd.api.nix.NIX_USER_PROFILES")
+    @patch("sd.api.nix.NIX_PROFILES")
+    def test_get_hm_profiles_root_user_exists(self, mock_profiles, mock_user_profiles):
+        from sd.api.nix import get_hm_profiles_root
+
+        mock_user_profiles.exists.return_value = True
+        result = get_hm_profiles_root()
+        assert result == mock_user_profiles
+
+    @patch("sd.api.nix.NIX_USER_PROFILES")
+    @patch("sd.api.nix.NIX_PROFILES")
+    def test_get_hm_profiles_root_fallback_to_global(
+        self, mock_profiles, mock_user_profiles
+    ):
+        from sd.api.nix import get_hm_profiles_root
+
+        mock_user_profiles.exists.return_value = False
+        result = get_hm_profiles_root()
+        assert result is not None
+
+
+class TestChangeWorkdir:
+    @patch("sd.api.nix.DOTFILES", "/test/dotfiles")
+    @patch("os.chdir")
+    @patch("os.getcwd", return_value="/different/path")
+    @patch("os.path.isdir", return_value=True)
+    def test_change_workdir_decorator(self, mock_isdir, mock_getcwd, mock_chdir):
+        from sd.api.nix import change_workdir
+
+        @change_workdir
+        def dummy_func():
+            return "executed"
+
+        result = dummy_func()
+        assert result == "executed"
+
+    @patch("sd.api.nix.DOTFILES", "/test/dotfiles")
+    @patch("os.chdir")
+    @patch("os.getcwd", return_value="/test/dotfiles")
+    @patch("os.path.isdir", return_value=True)
+    def test_change_workdir_no_change_needed(self, mock_isdir, mock_getcwd, mock_chdir):
+        from sd.api.nix import change_workdir
+
+        @change_workdir
+        def dummy_func():
+            return "executed"
+
+        result = dummy_func()
+        assert result == "executed"
+
+
+class TestGetGenerations:
+    @patch("sd.api.nix.get_re_compile")
+    @patch("sd.api.nix.get_hm_profiles_root")
+    @patch("sd.api.nix.NIX_PROFILES")
+    def test_get_generations_home_manager(
+        self, mock_nix_profiles, mock_hm_profiles, mock_re_compile
+    ):
+        from sd.api.nix import get_generations
+
+        mock_hm_profiles.return_value.iterdir.return_value = []
+        result = get_generations(use_home=True)
+        assert result == []

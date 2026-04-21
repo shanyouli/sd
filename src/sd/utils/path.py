@@ -78,9 +78,10 @@ def json_write(p: PathLink, dic: dict, indent: int = 2) -> None:
         f.write(json.dumps(dic, indent=indent))
 
 
-def json_read(p: PathLink) -> dict | None:
+def json_read(p: PathLink) -> dict[str, object] | None:
     p = Path(p).expanduser()
     if is_file(p):
         with open(p, mode="r", encoding="utf-8") as f:
-            return json.load(f)
+            data: dict[str, object] = json.load(f)
+            return data
     return None

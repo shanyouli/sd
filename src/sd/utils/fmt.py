@@ -5,11 +5,12 @@ import typer
 from sd.utils.enums import Colors
 
 
-def str_len(s) -> int:
+def str_len(s: str) -> int:
     try:
         import wcwidth
 
-        return wcwidth.wcswidth(s)
+        result = wcwidth.wcswidth(s)
+        return int(result) if result is not None else len(s)
     except ModuleNotFoundError:
         return len(s)
 
@@ -72,7 +73,7 @@ def term_fmt_by_list(lst: List[str], space: int = 4, use_num: bool = True):
 def term_fmt_by_dict(
     dic: dict[str, str], space: int = 4, dic_sep: str = "   ", use_num: bool = True
 ) -> None:
-    pre_keys = dic.keys()
+    pre_keys = list(dic.keys())
     pre_vals = [str(i) for i in dic.values()]
     pre_size = str_len(str(len(pre_keys))) if use_num else 0
     term_columns = columns()

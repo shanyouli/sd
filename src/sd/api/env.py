@@ -18,7 +18,10 @@ def save(file: str = typer.Argument(JSON_FILE, help="save file")):
     if not par_dir.is_absolute():
         file = os.path.join(get_cache_dir(), file)
     SHELL = os.getenv("SHELL")
-    SHELL = SHELL if SHELL.startswith("/") else cmd.getout(f"which {SHELL}")
+    if SHELL is None:
+        SHELL = "/bin/sh"
+    elif not SHELL.startswith("/"):
+        SHELL = cmd.getout(f"which {SHELL}")
     proc = cmd.getout(
         f"""
     unset PATH __NIX_DARWIN_SET_ENVIRONMENT_DONE __ETC_ZPROFILE_SOURCED

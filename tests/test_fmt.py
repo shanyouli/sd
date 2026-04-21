@@ -95,3 +95,19 @@ class TestEchoFunctions:
         from sd.utils.fmt import echo
 
         assert callable(echo)
+
+
+class TestTermFmtByDict:
+    @patch("os.get_terminal_size")
+    def test_term_fmt_by_dict_with_data(self, mock_terminal_size):
+        from sd.utils.fmt import term_fmt_by_dict
+
+        mock_terminal_size.return_value = type("obj", (object,), {"columns": 80})()
+        term_fmt_by_dict({"key1": "value1", "key2": "value2"})
+
+    @patch("os.get_terminal_size")
+    def test_term_fmt_by_dict_with_use_num(self, mock_terminal_size):
+        from sd.utils.fmt import term_fmt_by_dict
+
+        mock_terminal_size.return_value = type("obj", (object,), {"columns": 80})()
+        term_fmt_by_dict({"key1": "value1"}, use_num=True)

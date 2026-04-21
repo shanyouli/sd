@@ -1,25 +1,41 @@
+import os
 import re
+from functools import lru_cache
 
 import typer
 from sd.utils import cmd, fmt
-import os
 
 app = typer.Typer()
 
 
+def _get_uid() -> str:
+    result = cmd.run(["id", "-u"], capture_output=True)
+    return result.stdout.decode().strip() if result else ""
+
+
+@lru_cache(maxsize=1)
+def _get_all_services() -> list[str]:
+    result = cmd.getout("launchctl list")
+    return result.split("\n")
+
+
 # @see https://github.com/andrewp-as-is/launchctl.py/raw/master/launchctl/__init__.py
 def get_all_service():
-    result = cmd.getout("launchctl list")
-    result_list = result.split("\n")
-    compile = re.compile(r".*org\.nixos\.(.*)")
-    return [compile.match(i).group(1) for i in result_list if compile.match(i)]
+    result_list = _get_all_services()
+    pattern = re.compile(r".*org\.nixos\.(.*)")
+    services = []
+    for i in result_list:
+        match = pattern.match(i)
+        if match:
+            services.append(match.group(1))
+    return services
 
 
 def get_all_failed_service():
-    result = cmd.getout("launchctl list")
+    result_list = _get_all_services()
     out = []
-    for i in result.split("\n"):
-        if i.find("org.nixos."):
+    for i in result_list:
+        if "org.nixos." in i:
             i_list = i.split()
             if i_list[0] == "-" and i_list[1] != "0":
                 fmt.warn(
@@ -57,13 +73,13 @@ def restart(
 ):
     service_name = get_service(service_name)
     if service_name:
-        uid = cmd.run(["id", "-u"], capture_output=True).stdout.decode().strip()
+        uid = _get_uid()
         cmd.run(
             ["launchctl", "kickstart", "-k", f"gui/{uid}/{service_name}"],
             dry_run=dry_run,
         )
     elif all_service:
-        uid = cmd.run(["id", "-u"], capture_output=True).stdout.decode().strip()
+        uid = _get_uid()
         for i in get_all_service():
             cmd.run(
                 ["launchctl", "kickstart", "-k", f"gui/{uid}/org.nixos.{i}"],
@@ -111,8 +127,11 @@ def disable(
     if name:
         service_name = get_service(name)
         if service_name and service_name.startswith("org.nixos"):
-            uid = cmd.run(["id", "-u"], capture_output=True).stdout.decode().strip()
-            cmd.run(["launchctl", "bootout", "-w", f"gui/{uid}/name"], dry_run=dry_run)
+            uid = _get_uid()
+            if uid:
+                cmd.run(
+                    ["launchctl", "bootout", "-w", f"gui/{uid}/name"], dry_run=dry_run
+                )
         elif os.path.exists(os.path.expanduser(name)):
             cmd.run(
                 ["launchctl", "unload", "-w", os.path.expanduser(name)], dry_run=dry_run
@@ -137,7 +156,7 @@ def enable(
         raise typer.Abort()
 
 
-def __parse_value(string):
+def _parse_value(string: str) -> str:
     return string.split(" = ")[1].replace(";", "").replace('"', "")
 
 
@@ -159,18 +178,19 @@ def status(
     if name:
         result = cmd.getout(f"launchctl list {name}")
 
-        out = dict()
+        out: dict = {}
+        key: str = ""
         for line in result.splitlines():
             if '" =' in line:
                 key = line.split('"')[1]
                 if ";" in line:
-                    out[key] = _py_value(__parse_value(line))
-            if '" =' not in line and '";' in line:
+                    out[key] = _py_value(_parse_value(line))
+            elif '" =' not in line and '";' in line:
                 out[key] = out.get(key, []) + [line.split('"')[1]]
-        if "PID" in out.keys():
+        if "PID" in out:
             fmt.info(f"{out['Label']} is running, PID: {out['PID']} ...")
             fmt.term_fmt_by_dict(out, use_num=False)
-        else:
+        elif "Label" in out:
             fmt.warn(
                 f"{out['Label']} stop running, last exit status: {out['LastExitStatus']} ..."
             )

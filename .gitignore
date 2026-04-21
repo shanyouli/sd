@@ -4,3 +4,4 @@
 /dist/
 /.python-version
 /test.nix
+/.coverage
