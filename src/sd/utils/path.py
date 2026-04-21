@@ -2,9 +2,10 @@ import json
 import os
 from pathlib import Path
 from typing import Union
+
 from sd.utils import cmd
 
-PathLink = Union[str, bytes, Path]
+PathLink = Union[str, Path]
 
 
 def is_exist(p: PathLink) -> bool:
@@ -27,7 +28,7 @@ def get_parent(p: PathLink) -> Path:
     return Path(p).expanduser().parent
 
 
-def suffix_is(p: PathLink, ext) -> bool:
+def suffix_is(p: PathLink, ext: str) -> bool:
     ext = ext if ext.startswith(".") else f".{ext}"
     return Path(p).expanduser().suffix == ext
 
@@ -36,8 +37,7 @@ def readlink(p: PathLink, isLast: bool = False) -> Path:
     p = Path(p).expanduser()
     if p.is_symlink():
         return p.resolve() if isLast else p.readlink()
-    else:
-        return p
+    return p
 
 
 def link_exists(p: PathLink) -> bool:
@@ -49,16 +49,16 @@ def mkdir(p: PathLink) -> None:
     p = Path(p).expanduser()
     if p.exists():
         if not p.is_dir():
-            raise FileExistsError(f"Path {p._str} already exists")
+            raise FileExistsError(f"Path {p} already exists")
     else:
         try:
-            os.makedirs()
+            os.makedirs(p)
         except PermissionError:
             cmd.getout(f"sudo mkdir -p {os.path.abspath(p)}")
 
 
 def abspath(p: PathLink) -> Path:
-    return os.path.abspath(Path(p).expanduser())
+    return Path(os.path.abspath(Path(p).expanduser()))
 
 
 def remove_file_or_link(p: PathLink) -> None:
@@ -71,16 +71,16 @@ def remove_file_or_link(p: PathLink) -> None:
         cmd.getout(f"sudo rm -vf {os.path.abspath(p)}")
 
 
-def json_write(p: PathLink, dic, indent: int = 2) -> None:
+def json_write(p: PathLink, dic: dict, indent: int = 2) -> None:
     parent_dir = get_parent(p)
     mkdir(parent_dir)
     with open(p, mode="w", encoding="utf-8") as f:
-        # json.dump(source_env, f, indent=2)
         f.write(json.dumps(dic, indent=indent))
 
 
-def json_read(p: PathLink) -> dict:
+def json_read(p: PathLink) -> dict | None:
     p = Path(p).expanduser()
     if is_file(p):
         with open(p, mode="r", encoding="utf-8") as f:
             return json.load(f)
+    return None

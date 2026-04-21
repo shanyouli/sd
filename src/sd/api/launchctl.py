@@ -110,7 +110,7 @@ def disable(
 ):
     if name:
         service_name = get_service(name)
-        if service_name and service_name.starswith("org.nixos"):
+        if service_name and service_name.startswith("org.nixos"):
             uid = cmd.run(["id", "-u"], capture_output=True).stdout.decode().strip()
             cmd.run(["launchctl", "bootout", "-w", f"gui/{uid}/name"], dry_run=dry_run)
         elif os.path.exists(os.path.expanduser(name)):
