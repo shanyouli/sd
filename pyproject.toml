@@ -53,3 +53,6 @@ disable_error_code = [
     "possibly-undefined",
 ]
 no_implicit_optional = false
+
+[tool.basedpyright.analysis]
+reportAny = false

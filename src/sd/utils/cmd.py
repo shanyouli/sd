@@ -1,16 +1,16 @@
 import subprocess
-from typing import List
 
 from sd.utils import fmt as strfmt
+from collections.abc import Sequence
 
 
 def run(
-    cmd_list: List[str] | str,
+    cmd_list: Sequence[str] | str,
     capture_output: bool = False,
     shell: bool = False,
     show: bool = False,
     dry_run: bool = False,
-) -> subprocess.CompletedProcess | None:
+) -> subprocess.CompletedProcess[str] | None:
     if isinstance(cmd_list, str):
         shell = True
         cmd_str = cmd_list
@@ -24,6 +24,7 @@ def run(
         (cmd_str if shell else cmd_list),
         capture_output=capture_output,
         shell=shell,
+        text=True,
     )
 
 
@@ -32,12 +33,14 @@ def exists(cmd_str: str) -> bool:
     return r.returncode == 0 if r else False
 
 
-def test(cmd_list: List[str]) -> bool:
+def test(cmd_list: Sequence[str]) -> bool:
     result = run(cmd_list)
     return result.returncode == 0 if result else False
 
 
-def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) -> str:
+def getout(
+    cmd_str: str | Sequence[str], shell: bool = False, show: bool = False
+) -> str:
     "获取命令结果，当结果状态码非0时，抛出错误"
     if isinstance(cmd_str, str):
         if show:
@@ -49,9 +52,9 @@ def getout(cmd_str: str | List[str], shell: bool = False, show: bool = False) ->
     process = run(cmd_str, capture_output=True, shell=shell, show=show)
     if process and process.returncode == 0:
         stdout = process.stdout
-        return stdout.decode().strip() if stdout else ""
+        return stdout.strip() if stdout else ""
     raise subprocess.SubprocessError(
-        process.stdout.decode().strip() if process and process.stdout else ""
+        process.stdout.strip() if process and process.stdout else ""
     )
 
 

@@ -1,7 +1,9 @@
+# pyright: reportAny=false
 import typer
 import plistlib
 import tempfile
 from pathlib import Path
+from typing import Annotated
 from sd.utils import cmd, fmt, path, macutils
 
 app = typer.Typer()
@@ -12,41 +14,44 @@ def diskSetup():
     if not cmd.test("grep -q ^run\\b /etc/synthetic.conf".split()):
         APFS_UTIL = "/System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util"
         fmt.info("setting up /etc/synthetic.conf")
-        cmd.run(
-            "echo 'run\tprivate/var/run' | sudo tee -a /etc/synthetic.conf".split(),
+        _ = cmd.run(
+            "echo 'run\tprivatevar/run' | sudo tee -a /etc/synthetic.conf".split(),
             shell=True,
         )
-        cmd.run([APFS_UTIL, "-B"])
-        cmd.run([APFS_UTIL, "-t"])
+        _ = cmd.run([APFS_UTIL, "-B"])
+        _ = cmd.run([APFS_UTIL, "-t"])
     if not cmd.run(["test", "-L", "/run"]):
         fmt.info("linking /run directory")
-        cmd.run("sudo ln -sfn private/var/run /run".split())
+        _ = cmd.run("sudo ln -sfn private/var/run /run".split())
     fmt.success("disk setup complete")
 
 
 @app.command(help="sync all.app to other file")
 def syncapps(
-    source: str = typer.Argument(None, help="source path"),
-    target: str = typer.Argument(None, help="target path."),
+    source: Annotated[str | None, typer.Argument(help="source path")] = None,
+    target: Annotated[str | None, typer.Argument(help="target path.")] = None,
 ):
-    macutils.sync_trampolines(source, target)
+    if source is None or target is None:
+        fmt.error("error.")
+    _ = macutils.sync_trampolines(source, target)
 
 
 @app.command(help="make alias, When target is None, it means get the original path.")
 def alias(
-    source: str = typer.Argument(None, help="source paths"),
-    target: str = typer.Argument(None, help="alias target path."),
+    source: Annotated[str | None, typer.Argument(help="source path")] = None,
+    target: Annotated[str | None, typer.Argument(help="target path.")] = None,
 ) -> str:
+    if source is None:
+        fmt.error("Source path is required.")
+        raise typer.Abort()
     source_path: Path = path.abspath(source)
     if target is None:
-        if (
-            path.is_file(source_path)
-            and cmd.run(
+        if path.is_file(source_path):
+            check_alias = cmd.run(
                 f"file {source_path} | grep 'MacOS Alias file' >/dev/null"
-            ).returncode
-            == 0
-        ):
-            source_path_str = cmd.getout(f"""osascript <<EOF
+            )
+            if check_alias is not None and check_alias.returncode == 0:
+                source_path_str = cmd.getout(f"""osascript <<EOF
 tell application "Finder"
     set theItem to (POSIX file "{source_path}") as alias
     if the kind of theItem is "alias" then
@@ -55,11 +60,11 @@ tell application "Finder"
 end tell
 EOF
             """)
-            fmt.info(f"The alias for file {source_path} is {source_path_str}")
-            return source_path_str
-        else:
-            fmt.error(f"{source_path} Not an alias file")
-            return str(source_path)
+                fmt.info(f"The alias for file {source_path} is {source_path_str}")
+                return source_path_str
+        fmt.error(f"{source_path} Not an alias file")
+        return str(source_path)
+
     target_path: Path = path.abspath(target)
 
     if not path.is_exist(source):
@@ -75,9 +80,9 @@ EOF
     path.mkdir(target_parent)
     fmt.info(f"make alias from {source_path} to {target_path}")
     if cmd.exists("mkalias"):
-        cmd.run(["mkalias", str(source_path), str(target_path)])
+        _ = cmd.run(["mkalias", str(source_path), str(target_path)])
     else:
-        cmd.run(f"""osascript <<EOF
+        _ = cmd.run(f"""osascript <<EOF
 tell application "Finder"
     set originalPath to POSIX file "{source_path}"
     set aliasPath to POSIX file "{target_parent}"
@@ -91,11 +96,9 @@ EOF
 
 @app.command(help="Docker restart")
 def refresh(
-    rd: bool = typer.Option(
-        False, help="Redirect the bundle id to specify the version"
-    ),
+    rd: Annotated[bool, typer.Argument(help="target path.")] = False,
 ):
-    cmd.run(
+    _ = cmd.run(
         [
             "defaults",
             "write",
@@ -110,7 +113,7 @@ def refresh(
         shell=True,
     )
     if rd:
-        cmd.run(
+        _ = cmd.run(
             [
                 "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister",
                 "-kill",
@@ -126,7 +129,9 @@ def refresh(
 
 
 @app.command(help="toggle to set proxy for org.nixos.nix-daemon.plist")
-def proxy(url: str = typer.Option("", help="proxy url")):
+def proxy(
+    url: Annotated[str, typer.Argument(help="target path.")] = "",
+):
     """
     @see https://github.com/ryan4yin/nix-darwin-kickstarter/blob/main/rich-demo/scripts/darwin_set_proxy.py
     """
