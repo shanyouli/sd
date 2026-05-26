@@ -1,30 +1,30 @@
 from datetime import datetime
 from pathlib import Path
+from subprocess import CompletedProcess
 from unittest.mock import patch
 
 import pytest
 
 
 class TestGetFlake:
-    @patch("sd.api.nix.DOTFILES", "/test/dotfiles")
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.DOTFILES", "/test/dotfiles")
+    @patch("sd.api.nix.common.cmd")
     def test_get_flake_returns_dotfiles_when_exists(self, mock_cmd):
         from sd.api.nix import get_flake
 
         result = get_flake()
         assert result == "/test/dotfiles"
 
-    @patch("sd.api.nix.DOTFILES", None)
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.DOTFILES", None)
+    @patch("sd.api.nix.common.cmd")
     def test_get_flake_returns_remote_flake_when_no_local(self, mock_cmd):
-        from sd.api.nix import get_flake
-        from sd.api.nix import REMOTE_FLAKE
+        from sd.api.nix import REMOTE_FLAKE, get_flake
 
         mock_cmd.getout.side_effect = Exception("not a git repo")
         result = get_flake()
         assert result == REMOTE_FLAKE
 
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_get_flake_with_current_dir(self, mock_cmd):
         from sd.api.nix import get_flake
 
@@ -35,9 +35,8 @@ class TestGetFlake:
 
 
 class TestFlakeInputs:
-    @patch("sd.api.nix.path")
-    @patch("sd.api.nix.cmd")
-    def test_get_flake_inputs_by_lock(self, mock_cmd, mock_path):
+    @patch("sd.api.nix.common.path")
+    def test_get_flake_inputs_by_lock(self, mock_path):
         from sd.api.nix import get_flake_inputs_by_lock
 
         mock_path.json_read.return_value = {
@@ -58,18 +57,18 @@ class TestFlakeInputs:
 
 
 class TestFlakePlatform:
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_get_flake_platform_darwin(self, mock_cmd):
-        from sd.api.nix import get_flake_platform, FlakeOutputs
+        from sd.api.nix import FlakeOutputs, get_flake_platform
 
         mock_cmd.exists.side_effect = lambda x: x == "darwin-rebuild"
-        with patch("sd.api.nix.ISMAC", True):
+        with patch("sd.api.nix.common.ISMAC", True):
             result = get_flake_platform()
             assert result == FlakeOutputs.DARWIN
 
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_get_flake_platform_nixos(self, mock_cmd):
-        from sd.api.nix import get_flake_platform, FlakeOutputs
+        from sd.api.nix import FlakeOutputs, get_flake_platform
 
         mock_cmd.exists.side_effect = lambda x: x == "nixos-rebuild"
         result = get_flake_platform()
@@ -77,10 +76,9 @@ class TestFlakePlatform:
 
 
 class TestDefaultHost:
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_get_default_host(self, mock_cmd):
-        from sd.api.nix import get_default_host
-        from sd.api.nix import SYSTEM_ARCH, SYSTEM_OS
+        from sd.api.nix import SYSTEM_ARCH, SYSTEM_OS, get_default_host
 
         mock_cmd.getout.return_value = "testuser"
         result = get_default_host()
@@ -116,7 +114,7 @@ class TestReCompile:
 
 class TestFormatGeneration:
     def test_format_generation(self):
-        from sd.api.nix import format_generation, Generation
+        from sd.api.nix import Generation, format_generation
 
         gen = Generation(
             version=5,
@@ -130,19 +128,19 @@ class TestFormatGeneration:
 
 class TestSelect:
     def test_select_returns_nixos(self):
-        from sd.api.nix import select, FlakeOutputs
+        from sd.api.nix import FlakeOutputs, select
 
         result = select(nixos=True, darwin=False, home=False)
         assert result == FlakeOutputs.NIXOS
 
     def test_select_returns_darwin(self):
-        from sd.api.nix import select, FlakeOutputs
+        from sd.api.nix import FlakeOutputs, select
 
         result = select(nixos=False, darwin=True, home=False)
         assert result == FlakeOutputs.DARWIN
 
     def test_select_returns_home_manager(self):
-        from sd.api.nix import select, FlakeOutputs
+        from sd.api.nix import FlakeOutputs, select
 
         result = select(nixos=False, darwin=False, home=True)
         assert result == FlakeOutputs.HOME_MANAGER
@@ -155,7 +153,7 @@ class TestSelect:
 
 
 class TestNixVersion:
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_nix_version_str(self, mock_cmd):
         from sd.api.nix import nix_version_str
 
@@ -163,7 +161,7 @@ class TestNixVersion:
         result = nix_version_str()
         assert result == "2.18.0"
 
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_nix_is_lix(self, mock_cmd):
         from sd.api.nix import nix_is_lix
 
@@ -171,7 +169,7 @@ class TestNixVersion:
         result = nix_is_lix()
         assert result is True
 
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_nix_is_lix_false(self, mock_cmd):
         from sd.api.nix import nix_is_lix
 
@@ -179,7 +177,7 @@ class TestNixVersion:
         result = nix_is_lix()
         assert result is False
 
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_nix_version_is_greater_true(self, mock_cmd):
         from sd.api.nix import nix_version_is_greater
 
@@ -187,7 +185,7 @@ class TestNixVersion:
         result = nix_version_is_greater("2.18")
         assert result is True
 
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_nix_version_is_greater_false(self, mock_cmd):
         from sd.api.nix import nix_version_is_greater
 
@@ -197,39 +195,39 @@ class TestNixVersion:
 
 
 class TestFlakeInputsEdgeCases:
-    @patch("sd.api.nix.path")
+    @patch("sd.api.nix.common.path")
     def test_get_flake_inputs_by_lock_empty_data(self, mock_path):
         from sd.api.nix import get_flake_inputs_by_lock
 
         mock_path.json_read.return_value = None
-        with patch("sd.api.nix.typer"):
+        with patch("sd.api.nix.common.typer"):
             with pytest.raises(Exception):
                 get_flake_inputs_by_lock("/test/path")
 
-    @patch("sd.api.nix.path")
+    @patch("sd.api.nix.common.path")
     def test_get_flake_inputs_by_lock_missing_nodes(self, mock_path):
         from sd.api.nix import get_flake_inputs_by_lock
 
         mock_path.json_read.return_value = {}
-        with patch("sd.api.nix.typer"):
+        with patch("sd.api.nix.common.typer"):
             with pytest.raises(Exception):
                 get_flake_inputs_by_lock("/test/path")
 
 
 class TestFlakePlatformMore:
-    @patch("sd.api.nix.cmd")
+    @patch("sd.api.nix.common.cmd")
     def test_get_flake_platform_home_manager(self, mock_cmd):
-        from sd.api.nix import get_flake_platform, FlakeOutputs
+        from sd.api.nix import FlakeOutputs, get_flake_platform
 
         mock_cmd.exists.return_value = False
-        with patch("sd.api.nix.ISMAC", False):
+        with patch("sd.api.nix.common.ISMAC", False):
             result = get_flake_platform()
             assert result == FlakeOutputs.HOME_MANAGER
 
 
 class TestGetHmProfilesRoot:
-    @patch("sd.api.nix.NIX_USER_PROFILES")
-    @patch("sd.api.nix.NIX_PROFILES")
+    @patch("sd.api.nix.common.NIX_USER_PROFILES")
+    @patch("sd.api.nix.common.NIX_PROFILES")
     def test_get_hm_profiles_root_user_exists(self, mock_profiles, mock_user_profiles):
         from sd.api.nix import get_hm_profiles_root
 
@@ -237,8 +235,8 @@ class TestGetHmProfilesRoot:
         result = get_hm_profiles_root()
         assert result == mock_user_profiles
 
-    @patch("sd.api.nix.NIX_USER_PROFILES")
-    @patch("sd.api.nix.NIX_PROFILES")
+    @patch("sd.api.nix.common.NIX_USER_PROFILES")
+    @patch("sd.api.nix.common.NIX_PROFILES")
     def test_get_hm_profiles_root_fallback_to_global(
         self, mock_profiles, mock_user_profiles
     ):
@@ -250,7 +248,7 @@ class TestGetHmProfilesRoot:
 
 
 class TestChangeWorkdir:
-    @patch("sd.api.nix.DOTFILES", "/test/dotfiles")
+    @patch("sd.api.nix.common.DOTFILES", "/test/dotfiles")
     @patch("os.chdir")
     @patch("os.getcwd", return_value="/different/path")
     @patch("os.path.isdir", return_value=True)
@@ -264,7 +262,7 @@ class TestChangeWorkdir:
         result = dummy_func()
         assert result == "executed"
 
-    @patch("sd.api.nix.DOTFILES", "/test/dotfiles")
+    @patch("sd.api.nix.common.DOTFILES", "/test/dotfiles")
     @patch("os.chdir")
     @patch("os.getcwd", return_value="/test/dotfiles")
     @patch("os.path.isdir", return_value=True)
@@ -280,9 +278,9 @@ class TestChangeWorkdir:
 
 
 class TestGetGenerations:
-    @patch("sd.api.nix.get_re_compile")
-    @patch("sd.api.nix.get_hm_profiles_root")
-    @patch("sd.api.nix.NIX_PROFILES")
+    @patch("sd.api.nix.common.get_re_compile")
+    @patch("sd.api.nix.common.get_hm_profiles_root")
+    @patch("sd.api.nix.common.NIX_PROFILES")
     def test_get_generations_home_manager(
         self, mock_nix_profiles, mock_hm_profiles, mock_re_compile
     ):
@@ -310,3 +308,173 @@ class TestUpdate:
         )
         mock_get_flake_inputs.assert_not_called()
         assert result is None
+
+
+class TestNhBackend:
+    def test_get_nh_namespace(self):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import get_nh_namespace
+
+        assert get_nh_namespace(FlakeOutputs.NIXOS) == "os"
+        assert get_nh_namespace(FlakeOutputs.DARWIN) == "darwin"
+        assert get_nh_namespace(FlakeOutputs.HOME_MANAGER) == "home"
+
+    @patch("sd.api.nix.nh.nix_diff")
+    @patch("sd.api.nix.nh.get_current_generation", return_value=None)
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    @patch("sd.api.nix.nh.cmd")
+    def test_build_with_nh_uses_home_configuration_flag(
+        self, mock_cmd, mock_get_flake, mock_generation, mock_diff
+    ):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import build_with_nh
+
+        mock_cmd.run.return_value = CompletedProcess(args=[], returncode=0)
+
+        build_with_nh(
+            FlakeOutputs.HOME_MANAGER,
+            "alice@host",
+            remote=False,
+            debug=True,
+            dry_run=False,
+            extra_args=["--keep-going"],
+        )
+
+        mock_cmd.run.assert_called_once_with(
+            [
+                "nh",
+                "home",
+                "build",
+                "--impure",
+                "--diff",
+                "never",
+                "--show-trace",
+                "-L",
+                "--configuration",
+                "alice@host",
+                "/dotfiles",
+                "--",
+                "--keep-going",
+            ],
+            dry_run=False,
+        )
+        mock_diff.assert_called_once()
+
+    @patch("sd.api.nix.nh.nix_diff")
+    @patch("sd.api.nix.nh.get_current_generation", return_value=None)
+    @patch("sd.api.nix.nh.cmd")
+    def test_switch_with_nh_uses_remote_darwin_hostname_flag(
+        self, mock_cmd, mock_generation, mock_diff
+    ):
+        from sd.api.nix import FlakeOutputs, REMOTE_FLAKE
+        from sd.api.nix.nh import switch_with_nh
+
+        mock_cmd.run.return_value = CompletedProcess(args=[], returncode=0)
+
+        with patch("sd.api.nix.nh.shell_backup") as mock_shell_backup:
+            switch_with_nh(
+                FlakeOutputs.DARWIN,
+                "macbook",
+                remote=True,
+                debug=False,
+                dry_run=True,
+                extra_args=None,
+            )
+
+        mock_shell_backup.assert_called_once()
+        mock_cmd.run.assert_called_once_with(
+            [
+                "nh",
+                "darwin",
+                "switch",
+                "--impure",
+                "--diff",
+                "never",
+                "--dry",
+                "--hostname",
+                "macbook",
+                REMOTE_FLAKE,
+            ],
+            dry_run=True,
+        )
+        mock_diff.assert_called()
+
+
+class TestBackendDispatch:
+    @patch("sd.api.nix.nix_backend.build_with_nix")
+    @patch("sd.api.nix.nh_backend.build_with_nh")
+    @patch("sd.api.nix.nh_backend.has_nh", return_value=True)
+    def test_build_uses_nh_when_available(
+        self, mock_has_nh, mock_build_with_nh, mock_build_with_nix
+    ):
+        from sd.api.nix import build
+
+        build(host="host", remote=False, darwin=True, dry_run=True, extra_args=None)
+
+        mock_build_with_nh.assert_called_once()
+        mock_build_with_nix.assert_not_called()
+
+    @patch("sd.api.nix.nix_backend.build_with_nix")
+    @patch("sd.api.nix.nh_backend.build_with_nh")
+    @patch("sd.api.nix.nh_backend.has_nh", return_value=False)
+    def test_build_uses_nix_when_nh_missing(
+        self, mock_has_nh, mock_build_with_nh, mock_build_with_nix
+    ):
+        from sd.api.nix import build
+
+        build(host="host", remote=False, home=True, dry_run=True, extra_args=None)
+
+        mock_build_with_nix.assert_called_once()
+        mock_build_with_nh.assert_not_called()
+
+    @patch("sd.api.nix.nix_backend.switch_with_nix")
+    @patch("sd.api.nix.nh_backend.switch_with_nh")
+    @patch("sd.api.nix.nh_backend.has_nh", return_value=True)
+    def test_switch_uses_nh_when_available(
+        self, mock_has_nh, mock_switch_with_nh, mock_switch_with_nix
+    ):
+        from sd.api.nix import switch
+
+        switch(host="host", remote=False, nixos=True, dry_run=True, extra_args=None)
+
+        mock_switch_with_nh.assert_called_once()
+        mock_switch_with_nix.assert_not_called()
+
+    @patch("sd.api.nix.nix_backend.switch_with_nix")
+    @patch("sd.api.nix.nh_backend.switch_with_nh")
+    @patch("sd.api.nix.nh_backend.has_nh", return_value=False)
+    def test_switch_uses_nix_when_nh_missing(
+        self, mock_has_nh, mock_switch_with_nh, mock_switch_with_nix
+    ):
+        from sd.api.nix import switch
+
+        switch(host="host", remote=False, darwin=True, dry_run=True, extra_args=None)
+
+        mock_switch_with_nix.assert_called_once()
+        mock_switch_with_nh.assert_not_called()
+
+    @patch("sd.api.nix.nix_backend.repl_with_nix")
+    @patch("sd.api.nix.nh_backend.repl_with_nh")
+    @patch("sd.api.nix.nh_backend.has_nh", return_value=True)
+    def test_repl_uses_nh_for_flake_mode_when_available(
+        self, mock_has_nh, mock_repl_with_nh, mock_repl_with_nix
+    ):
+        from sd.api.nix import repl
+
+        repl(pkgs=False, unstable=False, flake=True, dry_run=True)
+
+        mock_repl_with_nh.assert_called_once()
+        mock_repl_with_nix.assert_not_called()
+
+    @patch("sd.api.nix.nix_backend.repl_with_nix")
+    @patch("sd.api.nix.nh_backend.repl_with_nh")
+    @patch("sd.api.nix.nh_backend.has_nh", return_value=True)
+    def test_repl_keeps_nix_for_pkgs_mode(
+        self, mock_has_nh, mock_repl_with_nh, mock_repl_with_nix
+    ):
+        from sd.api.nix import repl
+
+        repl(pkgs=True, unstable=False, flake=False, dry_run=True)
+
+        mock_repl_with_nix.assert_called_once_with(True, False, False, True)
+        mock_repl_with_nh.assert_not_called()
