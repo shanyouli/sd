@@ -33,6 +33,7 @@ def syncapps(
 ):
     if source is None or target is None:
         fmt.error("error.")
+        raise typer.Abort()
     _ = macutils.sync_trampolines(source, target)
 
 

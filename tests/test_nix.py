@@ -291,3 +291,22 @@ class TestGetGenerations:
         mock_hm_profiles.return_value.iterdir.return_value = []
         result = get_generations(use_home=True)
         assert result == []
+
+
+class TestUpdate:
+    @patch("sd.api.nix.get_flake_inputs_by_lock")
+    @patch("sd.api.nix.cmd")
+    def test_update_all_uses_flake_update_and_returns_early(
+        self, mock_cmd, mock_get_flake_inputs
+    ):
+        from sd.api.nix import update
+
+        result = update.__wrapped__(all_update=True, commit=True, dry_run=True)
+
+        mock_cmd.run.assert_called_once_with(
+            ["nix", "flake", "update", "--commit-lock-file"],
+            dry_run=True,
+            shell=True,
+        )
+        mock_get_flake_inputs.assert_not_called()
+        assert result is None

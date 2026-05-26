@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
-import typer
 import sys
+from typing import Any, cast
+
+import typer
 
 from sd.api import env, launchctl, macbid, macos, nix
 from sd.utils import cmd
@@ -34,14 +36,14 @@ app.add_typer(app_completion, name="completion")
     help="Show completion for the specified shell, to copy or customize it.",
 )
 def show(ctx: typer.Context, shell: Shells) -> None:
-    typer.completion.show_callback(ctx, None, shell)
+    typer.completion.show_callback(ctx, cast(Any, None), shell)
 
 
 @app_completion.command(
     no_args_is_help=True, help="Install completion for the specified shell."
 )
 def install(ctx: typer.Context, shell: Shells) -> None:
-    typer.completion.install_callback(ctx, None, shell)
+    typer.completion.install_callback(ctx, cast(Any, None), shell)
 
 
 app.add_typer(
@@ -86,7 +88,7 @@ if cmd.exists("launchctl"):
     )
 
 
-def main():
+def main() -> None:
     typer.completion.completion_init()
     sys.exit(app())
 

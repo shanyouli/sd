@@ -8,7 +8,7 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from subprocess import SubprocessError
-from typing import List
+from typing import Any, List, cast
 
 import typer
 import typer.completion
@@ -49,14 +49,14 @@ app.add_typer(app_completion, name="completion")
     help="Show completion for the specified shell, to copy or customize it.",
 )
 def show(ctx: typer.Context, shell: Shells) -> None:
-    typer.completion.show_callback(ctx, None, shell)
+    typer.completion.show_callback(ctx, cast(Any, None), shell)
 
 
 @app_completion.command(
     no_args_is_help=True, help="Install completion for the specified shell."
 )
 def install(ctx: typer.Context, shell: Shells) -> None:
-    typer.completion.install_callback(ctx, None, shell)
+    typer.completion.install_callback(ctx, cast(Any, None), shell)
 
 
 def get_flake(current_dir: bool = False) -> str:
@@ -92,14 +92,16 @@ def get_flake_inputs_by_lock(flake_path: Path | None | str = None) -> list[str]:
     flake_path = os.getcwd() if flake_path is None else flake_path
     flake_lock = os.path.join(os.path.realpath(flake_path), "flake.lock")
     data_json = path.json_read(flake_lock)
-    if data_json:
-        try:
-            nodes: dict = data_json.get("nodes", {})
-            root: dict = nodes.get("root", {})
-            inputs: dict = root.get("inputs", {})
-            return list(inputs.keys())
-        except (KeyError, AttributeError) as er:
-            raise er
+    if isinstance(data_json, dict):
+        nodes = data_json.get("nodes")
+        if isinstance(nodes, dict):
+            nodes_dict = cast(dict[str, object], nodes)
+            root = nodes_dict.get("root")
+            if isinstance(root, dict):
+                root_dict = cast(dict[str, object], root)
+                inputs = root_dict.get("inputs")
+                if isinstance(inputs, dict):
+                    return [str(key) for key in inputs]
     fmt.error(f"Failed to read data from {flake_lock} file")
     raise typer.Abort()
 
@@ -555,6 +557,7 @@ def update(
         "-s",
         help="Update only flake-inputs that are currently stable on the system",
     ),
+    all_update: bool = typer.Option(False, "--all", "-a", help="Update all inputs."),
     commit: bool = typer.Option(False, help="commit the updated lockfile"),
     dry_run: bool = typer.Option(False, help="Test the result"),
 ):
@@ -565,6 +568,9 @@ def update(
     # when nix-repl reports an error, it will cause the inputs.flake to be very slow,
     # it should be used to get it by using the flake.lock file,
     # if the inputs.flake has been modified, you can use the nix-flake command to update the lock.
+    if all_update:
+        cmd.run(["nix", "flake", "update"] + flags, dry_run=dry_run, shell=True)
+        return None
     all_flakes = get_flake_inputs_by_lock()
     ignore_inputs = ["nixos-stable", "darwin-stable", "darwin", "home-manager"]
     msg = None

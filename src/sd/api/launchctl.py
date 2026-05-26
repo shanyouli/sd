@@ -10,7 +10,7 @@ app = typer.Typer()
 
 def _get_uid() -> str:
     result = cmd.run(["id", "-u"], capture_output=True)
-    return result.stdout.decode().strip() if result else ""
+    return result.stdout.strip() if result and result.stdout else ""
 
 
 @lru_cache(maxsize=1)

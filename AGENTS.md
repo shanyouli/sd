@@ -29,13 +29,16 @@ uv run pytest tests/ --cov=src/sd
 
 ```bash
 # Install dependencies first / 首先安装依赖
-uv sync --all-extras
+uv sync
 
-# Run ruff linter / 运行 ruff linter
-uv run ruff check .
+# Run ruff linter / 运行 ruff linter（优先使用系统 ruff）
+ruff check .
 
-# Run ruff type checker / 运行 ruff 类型检查
-uv run ruff check --select TYPE .
+# Run mypy / 运行 mypy
+uv run mypy .
+
+# Run ty / 运行 ty（优先使用系统 ty）
+ty check .
 ```
 
 ### Running the CLI / 运行 CLI
