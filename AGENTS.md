@@ -21,7 +21,7 @@ uv run pytest tests/test_nix.py -v
 # Run a single test / 运行单个测试
 uv run pytest tests/test_nix.py::TestFlakePlatform::test_get_flake_platform_darwin -v
 
-# Run tests with coverage / 运行带覆盖率的测试
+# Run tests with coverage / 运行带覆盖率的测试（依赖项目环境）
 uv run pytest tests/ --cov=src/sd
 ```
 
@@ -34,7 +34,7 @@ uv sync
 # Run ruff linter / 运行 ruff linter（优先使用系统 ruff）
 ruff check .
 
-# Run mypy / 运行 mypy
+# Run mypy / 运行 mypy（系统无 mypy，使用项目环境）
 uv run mypy .
 
 # Run ty / 运行 ty（优先使用系统 ty）
