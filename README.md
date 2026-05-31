@@ -26,7 +26,7 @@ $ sd [OPTIONS] COMMAND [ARGS]...
 * `sc`: macos launchctl services manager
 * `service`: macos launchctl services manager
 * `switch`: builds and activates the specified flake...
-* `update`: update all flake inputs or optionally...
+* `update`: update flake inputs
 
 ## `sd bid`
 
@@ -113,7 +113,6 @@ $ sd bootstrap [OPTIONS] [HOST]
 * `--nixos / --no-nixos`: [default: no-nixos]
 * `--darwin / --no-darwin`: [default: no-darwin]
 * `--home / --no-home`: [default: no-home]
-* `--remote / --no-remote`: Whether to fetch current changes from the remote  [default: no-remote]
 * `--debug / --no-debug`: [default: no-debug]
 * `--dry-run / --no-dry-run`: Test the result  [default: no-dry-run]
 * `-a, --args [AGES]`: nix additional parameters
@@ -135,7 +134,6 @@ $ sd build [OPTIONS] [HOST]
 
 **Options**:
 
-* `--remote / --no-remote`: whether to fetch from the remote  [default: no-remote]
 * `--nixos / --no-nixos`: [default: no-nixos]
 * `--darwin / --no-darwin`: [default: no-darwin]
 * `--home / --no-home`: [default: no-home]
@@ -641,7 +639,6 @@ $ sd switch [OPTIONS] [HOST]
 
 **Options**:
 
-* `--remote / --no-remote`: Whether to fetch from the remote  [default: no-remote]
 * `--nixos / --no-nixos`: [default: no-nixos]
 * `--darwin / --no-darwin`: [default: no-darwin]
 * `--home / --no-home`: [default: no-home]
@@ -652,19 +649,20 @@ $ sd switch [OPTIONS] [HOST]
 
 ## `sd update`
 
-update all flake inputs or optionally specific flakes
+update flake inputs
 
 **Usage**:
 
 ```console
-$ sd update [OPTIONS]
+$ sd update [OPTIONS] [INPUT]...
 ```
+
+**Arguments**:
+
+* `[INPUT]...`: flake input names to update, default updates all inputs
 
 **Options**:
 
-* `-f, --flake [FLAKE]`: specify an individual flake to be updated
-* `-n, --no-flake [FLAKE]`: Don't update the following flake
-* `-s, --stable`: Update only flake-inputs that are currently stable on the system
 * `--commit / --no-commit`: commit the updated lockfile  [default: no-commit]
 * `--dry-run / --no-dry-run`: Test the result  [default: no-dry-run]
 * `--help`: Show this message and exit.

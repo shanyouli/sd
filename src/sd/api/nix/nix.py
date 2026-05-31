@@ -9,13 +9,12 @@ from sd.api.nix.common import (
     shell_backup,
 )
 from sd.utils import cmd, fmt
-from sd.utils.enums import REMOTE_FLAKE, FlakeOutputs
+from sd.utils.enums import FlakeOutputs
 
 
 def build_with_nix(
     cfg: FlakeOutputs,
     host: str,
-    remote: bool,
     debug: bool,
     dry_run: bool,
     extra_args: list[str] | None,
@@ -29,7 +28,7 @@ def build_with_nix(
     else:
         fmt.error("could not infer system type.")
         raise typer.Abort()
-    flake = f"{REMOTE_FLAKE if remote else get_flake()}#{host}"
+    flake = f"{get_flake()}#{host}"
     flags = ["--impure"]
     flags += ["--show-trace", "-L"] if debug else []
     flags += extra_args if extra_args else []
@@ -44,7 +43,6 @@ def build_with_nix(
 def switch_with_nix(
     cfg: FlakeOutputs,
     host: str,
-    remote: bool,
     debug: bool,
     dry_run: bool,
     extra_args: list[str] | None,
@@ -59,7 +57,7 @@ def switch_with_nix(
     else:
         fmt.error("could not infer system type.")
         raise typer.Abort()
-    flake = [f"{REMOTE_FLAKE}#{host}"] if remote else [f"{get_flake()}#{host}"]
+    flake = [f"{get_flake()}#{host}"]
     flags = ["--impure"]
     flags += ["--show-trace", "-L"] if debug else []
     flags += extra_args if extra_args else []

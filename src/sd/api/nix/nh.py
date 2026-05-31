@@ -2,7 +2,7 @@ import typer
 
 from sd.api.nix.common import get_flake, shell_backup
 from sd.utils import cmd, fmt
-from sd.utils.enums import REMOTE_FLAKE, FlakeOutputs
+from sd.utils.enums import FlakeOutputs
 
 NH_NAMESPACE_BY_OUTPUT = {
     FlakeOutputs.NIXOS: "os",
@@ -21,10 +21,6 @@ def get_nh_namespace(cfg: FlakeOutputs) -> str:
         fmt.error("could not infer nh namespace.")
         raise typer.Abort()
     return namespace
-
-
-def _flake_ref(remote: bool) -> str:
-    return REMOTE_FLAKE if remote else get_flake()
 
 
 def _config_flag(cfg: FlakeOutputs) -> str:
@@ -53,7 +49,6 @@ def _append_extra_args(cmd_list: list[str], extra_args: list[str] | None) -> lis
 def build_with_nh(
     cfg: FlakeOutputs,
     host: str,
-    remote: bool,
     debug: bool,
     dry_run: bool,
     extra_args: list[str] | None,
@@ -62,7 +57,7 @@ def build_with_nh(
     cmd_list = (
         ["nh", namespace, "build"]
         + _nh_build_flags(debug=debug, dry_run=dry_run)
-        + [_config_flag(cfg), host, _flake_ref(remote)]
+        + [_config_flag(cfg), host, get_flake()]
     )
     cmd_list = _append_extra_args(cmd_list, extra_args)
     cmd.run(cmd_list, dry_run=dry_run)
@@ -71,7 +66,6 @@ def build_with_nh(
 def switch_with_nh(
     cfg: FlakeOutputs,
     host: str,
-    remote: bool,
     debug: bool,
     dry_run: bool,
     extra_args: list[str] | None,
@@ -82,7 +76,7 @@ def switch_with_nh(
     cmd_list = (
         ["nh", namespace, "switch"]
         + _nh_build_flags(debug=debug, dry_run=dry_run)
-        + [_config_flag(cfg), host, _flake_ref(remote)]
+        + [_config_flag(cfg), host, get_flake()]
     )
     cmd_list = _append_extra_args(cmd_list, extra_args)
     cmd.run(cmd_list, dry_run=dry_run)

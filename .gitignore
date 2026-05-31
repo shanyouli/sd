@@ -5,3 +5,4 @@
 /.python-version
 /test.nix
 /.coverage
+/.agent-shell/

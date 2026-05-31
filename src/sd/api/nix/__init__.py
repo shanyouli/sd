@@ -109,84 +109,24 @@ def install(ctx: typer.Context, shell: Shells) -> None:
 
 
 @app.command(
-    help="update all flake inputs or optionally specific flakes",
+    help="update flake inputs",
 )
 @change_workdir
 def update(
-    flake: List[str] = typer.Option(
+    inputs: List[str] = typer.Argument(
         None,
-        "--flake",
-        "-f",
-        metavar="[FLAKE]",
-        help="specify an individual flake to be updated",
+        metavar="[INPUT]",
+        help="flake input names to update, default updates all inputs",
     ),
-    not_flake: List[str] = typer.Option(
-        None,
-        "--no-flake",
-        "-n",
-        metavar="[FLAKE]",
-        help="Don't update the following flake",
-    ),
-    stable: bool = typer.Option(
-        False,
-        "--stable",
-        "-s",
-        help="Update only flake-inputs that are currently stable on the system",
-    ),
-    all_update: bool = typer.Option(False, "--all", "-a", help="Update all inputs."),
     commit: bool = typer.Option(False, help="commit the updated lockfile"),
     dry_run: bool = typer.Option(False, help="Test the result"),
 ):
     flags = ["--commit-lock-file"] if commit else []
-    flakes = []
-    # 使用 flake.lock 读取 inputs，避免 nix-repl 报错时拖慢 inputs 查询。
-    if all_update:
-        cmd.run(["nix", "flake", "update"] + flags, dry_run=dry_run, shell=True)
-        return None
-    all_flakes = get_flake_inputs_by_lock()
-    ignore_inputs = ["nixos-stable", "darwin-stable", "darwin", "home-manager"]
-    msg = None
-    if flake:
-        for i in flake:
-            if i in all_flakes:
-                flakes.append(i)
-            elif i == "stable":
-                flakes.append("home-manager")
-                if ISMAC:
-                    flakes.append("darwin-stable")
-                    flakes.append("darwin")
-                else:
-                    flakes.append("nixos-stable")
-            else:
-                fmt.error(
-                    f"The flake({i}) does not exist, please check all_flake or update it."
-                )
-                fmt.error(
-                    f"Currently supported input-flakes are: {' '.join(all_flakes)}"
-                )
-                raise typer.Abort()
-    all_flakes = (
-        all_flakes if stable else [i for i in all_flakes if i not in ignore_inputs]
+    cmd.run(
+        ["nix", "flake", "update"] + (inputs or []) + flags,
+        dry_run=dry_run,
+        shell=True,
     )
-    if not_flake:
-        flakes = all_flakes
-        for i in not_flake:
-            if i in flakes:
-                flakes.remove(i)
-            else:
-                fmt.warn(f"The flake({i}) does not exist, will ignore it.")
-    else:
-        msg = "updating all flake inputs"
-        flakes = flakes if flakes else all_flakes
-    fmt.info(f"updating {','.join(flakes)}" if msg is None else msg)
-    is_greater_2_18 = nix_version_is_greater("2.18")
-    if is_greater_2_18:
-        cmd.run(
-            ["nix", "flake", "update"] + flakes + flags, dry_run=dry_run, shell=True
-        )
-    else:
-        inputs = [f"--update-input {input_name}" for input_name in flakes]
-        cmd.run(["nix", "flake", "lock"] + inputs + flags, dry_run=dry_run, shell=True)
 
 
 @app.command(
@@ -200,9 +140,6 @@ def bootstrap(
     nixos: bool = False,
     darwin: bool = False,
     home: bool = False,
-    remote: bool = typer.Option(
-        default=False, help="Whether to fetch current changes from the remote"
-    ),
     debug: bool = False,
     dry_run: bool = typer.Option(False, help="Test the result"),
     extra_args: List[str] = typer.Option(
@@ -220,7 +157,7 @@ def bootstrap(
     ]
     flags += extra_args if extra_args else []
     flags += ["--show-trace", "-L"] if debug else []
-    bootstrap_flake = REMOTE_FLAKE if remote else get_flake(True)
+    bootstrap_flake = get_flake(True)
     if host is None:
         fmt.error("Host unspecified")
         return
@@ -285,7 +222,6 @@ def bootstrap(
 @app.command(help="builds the specified flake output")
 def build(
     host: str = typer.Argument(DEFAULT_HOST, help="the hostname to build"),
-    remote: bool = typer.Option(False, help="whether to fetch from the remote"),
     nixos: bool = False,
     darwin: bool = False,
     home: bool = False,
@@ -299,15 +235,14 @@ def build(
     if cfg is None:
         return
     if nh_backend.has_nh():
-        nh_backend.build_with_nh(cfg, host, remote, debug, dry_run, extra_args)
+        nh_backend.build_with_nh(cfg, host, debug, dry_run, extra_args)
     else:
-        nix_backend.build_with_nix(cfg, host, remote, debug, dry_run, extra_args)
+        nix_backend.build_with_nix(cfg, host, debug, dry_run, extra_args)
 
 
 @app.command(help="builds and activates the specified flake output")
 def switch(
     host: str = typer.Argument(DEFAULT_HOST, help="the hostname to build"),
-    remote: bool = typer.Option(False, help="Whether to fetch from the remote"),
     nixos: bool = False,
     darwin: bool = False,
     home: bool = False,
@@ -325,9 +260,9 @@ def switch(
     if cfg is None:
         return
     if nh_backend.has_nh():
-        nh_backend.switch_with_nh(cfg, host, remote, debug, dry_run, extra_args)
+        nh_backend.switch_with_nh(cfg, host, debug, dry_run, extra_args)
     else:
-        nix_backend.switch_with_nix(cfg, host, remote, debug, dry_run, extra_args)
+        nix_backend.switch_with_nix(cfg, host, debug, dry_run, extra_args)
 
 
 @app.command(help="Showing different information for the two latest builds")
@@ -421,7 +356,7 @@ def init(
     nix_install_profiles(dry_run)
     nixgc.clear_remove_default(True)
     nixgc.run()
-    bootstrap(host=host, darwin=True, remote=False, extra_args=None, dry_run=dry_run)
+    bootstrap(host=host, darwin=True, extra_args=None, dry_run=dry_run)
 
 
 if __name__ == "__main__":
