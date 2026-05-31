@@ -1,6 +1,6 @@
 import typer
 
-from sd.api.nix.common import get_current_generation, get_flake, nix_diff, shell_backup
+from sd.api.nix.common import get_flake, shell_backup
 from sd.utils import cmd, fmt
 from sd.utils.enums import REMOTE_FLAKE, FlakeOutputs
 
@@ -32,7 +32,7 @@ def _config_flag(cfg: FlakeOutputs) -> str:
 
 
 def _nh_build_flags(debug: bool, dry_run: bool) -> list[str]:
-    flags = ["--impure", "--diff", "never"]
+    flags = ["--impure"]
     if dry_run:
         flags.append("--dry")
     if debug:
@@ -65,11 +65,7 @@ def build_with_nh(
         + [_config_flag(cfg), host, _flake_ref(remote)]
     )
     cmd_list = _append_extra_args(cmd_list, extra_args)
-    use_home = cfg == FlakeOutputs.HOME_MANAGER
-    old_generation = get_current_generation(use_home)
-    result_out = cmd.run(cmd_list, dry_run=dry_run)
-    if dry_run or (result_out and result_out.returncode == 0):
-        nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
+    cmd.run(cmd_list, dry_run=dry_run)
 
 
 def switch_with_nh(
@@ -89,16 +85,7 @@ def switch_with_nh(
         + [_config_flag(cfg), host, _flake_ref(remote)]
     )
     cmd_list = _append_extra_args(cmd_list, extra_args)
-    use_home = cfg == FlakeOutputs.HOME_MANAGER
-    old_generation = get_current_generation(use_home)
-    hm_generation = get_current_generation(True)
-    result_out = cmd.run(cmd_list, dry_run=dry_run)
-    if dry_run or (result_out and result_out.returncode == 0):
-        nix_diff(use_home=use_home, dry_run=dry_run, old_generation=old_generation)
-        if old_generation != hm_generation:
-            nix_diff(
-                use_home=(not use_home), dry_run=dry_run, old_generation=hm_generation
-            )
+    cmd.run(cmd_list, dry_run=dry_run)
 
 
 def repl_with_nh(cfg: FlakeOutputs, dry_run: bool):

@@ -83,8 +83,12 @@ def repl_with_nix(
     dry_run: bool,
 ):
     cmd_str = "nix repl --expr "
-    exarg = "import <nixpkgs-unstable> {}" if unstable else None
-    exarg = "import <nixpkgs> {}" if pkgs else None
+    if pkgs:
+        exarg = "import <nixpkgs> {}"
+    elif unstable:
+        exarg = "import <nixpkgs-unstable> {}"
+    else:
+        exarg = None
     if flake:
         cmd_str = f"nix --extra-experimental-features repl-flake repl {get_flake()}"
     else:

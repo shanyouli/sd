@@ -319,13 +319,9 @@ class TestNhBackend:
         assert get_nh_namespace(FlakeOutputs.DARWIN) == "darwin"
         assert get_nh_namespace(FlakeOutputs.HOME_MANAGER) == "home"
 
-    @patch("sd.api.nix.nh.nix_diff")
-    @patch("sd.api.nix.nh.get_current_generation", return_value=None)
     @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
     @patch("sd.api.nix.nh.cmd")
-    def test_build_with_nh_uses_home_configuration_flag(
-        self, mock_cmd, mock_get_flake, mock_generation, mock_diff
-    ):
+    def test_build_with_nh_uses_home_configuration_flag(self, mock_cmd, mock_get_flake):
         from sd.api.nix import FlakeOutputs
         from sd.api.nix.nh import build_with_nh
 
@@ -346,8 +342,6 @@ class TestNhBackend:
                 "home",
                 "build",
                 "--impure",
-                "--diff",
-                "never",
                 "--show-trace",
                 "-L",
                 "--configuration",
@@ -358,14 +352,9 @@ class TestNhBackend:
             ],
             dry_run=False,
         )
-        mock_diff.assert_called_once()
 
-    @patch("sd.api.nix.nh.nix_diff")
-    @patch("sd.api.nix.nh.get_current_generation", return_value=None)
     @patch("sd.api.nix.nh.cmd")
-    def test_switch_with_nh_uses_remote_darwin_hostname_flag(
-        self, mock_cmd, mock_generation, mock_diff
-    ):
+    def test_switch_with_nh_uses_remote_darwin_hostname_flag(self, mock_cmd):
         from sd.api.nix import FlakeOutputs, REMOTE_FLAKE
         from sd.api.nix.nh import switch_with_nh
 
@@ -388,8 +377,6 @@ class TestNhBackend:
                 "darwin",
                 "switch",
                 "--impure",
-                "--diff",
-                "never",
                 "--dry",
                 "--hostname",
                 "macbook",
@@ -397,7 +384,332 @@ class TestNhBackend:
             ],
             dry_run=True,
         )
-        mock_diff.assert_called()
+
+
+class TestNixBackendDryRunOutput:
+    @patch("sd.api.nix.nix.nix_diff")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    def test_build_with_nix_nixos_remote_dry_run_output(
+        self, mock_generation, mock_diff, capsys
+    ):
+        from sd.api.nix import FlakeOutputs, REMOTE_FLAKE
+        from sd.api.nix.nix import build_with_nix
+
+        build_with_nix(
+            FlakeOutputs.NIXOS,
+            "server",
+            remote=True,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            f"> sudo nixos-rebuild build --flake {REMOTE_FLAKE}#server --impure"
+        ) in captured.out
+
+    @patch("sd.api.nix.nix.nix_diff")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    @patch("sd.api.nix.nix.get_flake", return_value="/dotfiles")
+    def test_build_with_nix_darwin_dry_run_output(
+        self, mock_get_flake, mock_generation, mock_diff, capsys
+    ):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nix import build_with_nix
+
+        build_with_nix(
+            FlakeOutputs.DARWIN,
+            "macbook",
+            remote=False,
+            debug=True,
+            dry_run=True,
+            extra_args=["--keep-going"],
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            "> sudo darwin-rebuild build --flake /dotfiles#macbook "
+            "--impure --show-trace -L --keep-going"
+        ) in captured.out
+
+    @patch("sd.api.nix.nix.nix_diff")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    def test_build_with_nix_home_remote_dry_run_output(
+        self, mock_generation, mock_diff, capsys
+    ):
+        from sd.api.nix import FlakeOutputs, REMOTE_FLAKE
+        from sd.api.nix.nix import build_with_nix
+
+        build_with_nix(
+            FlakeOutputs.HOME_MANAGER,
+            "alice@host",
+            remote=True,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            f"> home-manager build --flake {REMOTE_FLAKE}#alice@host --impure"
+        ) in captured.out
+
+    @patch("sd.api.nix.nix.nix_diff")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    @patch("sd.api.nix.nix.get_flake", return_value="/dotfiles")
+    @patch("sd.api.nix.nix.shell_backup")
+    def test_switch_with_nix_darwin_local_dry_run_output(
+        self, mock_shell_backup, mock_get_flake, mock_generation, mock_diff, capsys
+    ):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nix import switch_with_nix
+
+        switch_with_nix(
+            FlakeOutputs.DARWIN,
+            "macbook",
+            remote=False,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            "> sudo darwin-rebuild switch --flake /dotfiles#macbook --impure"
+        ) in captured.out
+        mock_shell_backup.assert_called_once()
+
+    @patch("sd.api.nix.nix.nix_diff")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    def test_switch_with_nix_nixos_remote_dry_run_output(
+        self, mock_generation, mock_diff, capsys
+    ):
+        from sd.api.nix import FlakeOutputs, REMOTE_FLAKE
+        from sd.api.nix.nix import switch_with_nix
+
+        switch_with_nix(
+            FlakeOutputs.NIXOS,
+            "server",
+            remote=True,
+            debug=True,
+            dry_run=True,
+            extra_args=["--fallback"],
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            f"> sudo nixos-rebuild switch --flake {REMOTE_FLAKE}#server "
+            "--impure --show-trace -L --fallback"
+        ) in captured.out
+
+    @patch("sd.api.nix.nix.nix_diff")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    @patch("sd.api.nix.nix.get_flake", return_value="/dotfiles")
+    def test_switch_with_nix_home_local_dry_run_output(
+        self, mock_get_flake, mock_generation, mock_diff, capsys
+    ):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nix import switch_with_nix
+
+        switch_with_nix(
+            FlakeOutputs.HOME_MANAGER,
+            "alice@host",
+            remote=False,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            "> home-manager switch --flake /dotfiles#alice@host --impure"
+        ) in captured.out
+
+    @patch("sd.api.nix.nix.get_flake", return_value="/dotfiles")
+    def test_repl_with_nix_flake_dry_run_output(self, mock_get_flake, capsys):
+        from sd.api.nix.nix import repl_with_nix
+
+        repl_with_nix(pkgs=False, unstable=False, flake=True, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "> nix --extra-experimental-features repl-flake repl /dotfiles" in (
+            captured.out
+        )
+
+    def test_repl_with_nix_pkgs_dry_run_output(self, capsys):
+        from sd.api.nix.nix import repl_with_nix
+
+        repl_with_nix(pkgs=True, unstable=False, flake=False, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "> nix repl --expr 'import <nixpkgs> {}'" in captured.out
+
+    def test_repl_with_nix_unstable_dry_run_output(self, capsys):
+        from sd.api.nix.nix import repl_with_nix
+
+        repl_with_nix(pkgs=False, unstable=True, flake=False, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "> nix repl --expr 'import <nixpkgs-unstable> {}'" in captured.out
+
+    def test_repl_with_nix_builtins_dry_run_output(self, capsys):
+        from sd.api.nix.nix import repl_with_nix
+
+        repl_with_nix(pkgs=False, unstable=False, flake=False, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "> nix repl --expr builtins" in captured.out
+
+
+class TestNhBackendDryRunOutput:
+    def test_build_with_nh_nixos_remote_dry_run_output(self, capsys):
+        from sd.api.nix import FlakeOutputs, REMOTE_FLAKE
+        from sd.api.nix.nh import build_with_nh
+
+        build_with_nh(
+            FlakeOutputs.NIXOS,
+            "server",
+            remote=True,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            f"> nh os build --impure --dry --hostname server {REMOTE_FLAKE}"
+        ) in captured.out
+
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    def test_build_with_nh_darwin_dry_run_output(self, mock_get_flake, capsys):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import build_with_nh
+
+        build_with_nh(
+            FlakeOutputs.DARWIN,
+            "macbook",
+            remote=False,
+            debug=True,
+            dry_run=True,
+            extra_args=["--keep-going"],
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            "> nh darwin build --impure --dry --show-trace -L "
+            "--hostname macbook /dotfiles -- --keep-going"
+        ) in captured.out
+
+    def test_build_with_nh_home_remote_dry_run_output(self, capsys):
+        from sd.api.nix import FlakeOutputs, REMOTE_FLAKE
+        from sd.api.nix.nh import build_with_nh
+
+        build_with_nh(
+            FlakeOutputs.HOME_MANAGER,
+            "alice@host",
+            remote=True,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            f"> nh home build --impure --dry --configuration alice@host {REMOTE_FLAKE}"
+        ) in captured.out
+
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    def test_switch_with_nh_home_dry_run_output(self, mock_get_flake, capsys):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import switch_with_nh
+
+        switch_with_nh(
+            FlakeOutputs.HOME_MANAGER,
+            "alice@host",
+            remote=False,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            "> nh home switch --impure --dry --configuration alice@host /dotfiles"
+        ) in captured.out
+
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    def test_switch_with_nh_nixos_dry_run_output(self, mock_get_flake, capsys):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import switch_with_nh
+
+        switch_with_nh(
+            FlakeOutputs.NIXOS,
+            "server",
+            remote=False,
+            debug=True,
+            dry_run=True,
+            extra_args=["--fallback"],
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            "> nh os switch --impure --dry --show-trace -L "
+            "--hostname server /dotfiles -- --fallback"
+        ) in captured.out
+
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    @patch("sd.api.nix.nh.shell_backup")
+    def test_switch_with_nh_darwin_dry_run_output(
+        self, mock_shell_backup, mock_get_flake, capsys
+    ):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import switch_with_nh
+
+        switch_with_nh(
+            FlakeOutputs.DARWIN,
+            "macbook",
+            remote=False,
+            debug=False,
+            dry_run=True,
+            extra_args=None,
+        )
+
+        captured = capsys.readouterr()
+        assert (
+            "> nh darwin switch --impure --dry --hostname macbook /dotfiles"
+        ) in captured.out
+        mock_shell_backup.assert_called_once()
+
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    def test_repl_with_nh_home_dry_run_output(self, mock_get_flake, capsys):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import repl_with_nh
+
+        repl_with_nh(FlakeOutputs.HOME_MANAGER, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "> nh home repl /dotfiles" in captured.out
+
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    def test_repl_with_nh_nixos_dry_run_output(self, mock_get_flake, capsys):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import repl_with_nh
+
+        repl_with_nh(FlakeOutputs.NIXOS, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "> nh os repl /dotfiles" in captured.out
+
+    @patch("sd.api.nix.nh.get_flake", return_value="/dotfiles")
+    def test_repl_with_nh_darwin_dry_run_output(self, mock_get_flake, capsys):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nh import repl_with_nh
+
+        repl_with_nh(FlakeOutputs.DARWIN, dry_run=True)
+
+        captured = capsys.readouterr()
+        assert "> nh darwin repl /dotfiles" in captured.out
 
 
 class TestBackendDispatch:
