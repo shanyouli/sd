@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 from subprocess import CompletedProcess
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 
@@ -276,6 +276,110 @@ class TestChangeWorkdir:
         result = dummy_func()
         assert result == "executed"
 
+    @patch("sd.api.nix.common.cmd")
+    @patch("sd.api.nix.common.DOTFILES", "/test/dotfiles")
+    @patch("os.chdir")
+    @patch("os.getcwd", return_value="/different/path")
+    @patch("os.path.isdir", return_value=True)
+    def test_change_workdir_temporarily_restores_skip_worktree(
+        self, mock_isdir, mock_getcwd, mock_chdir, mock_cmd
+    ):
+        from sd.api.nix import change_workdir
+
+        mock_cmd.getout.return_value = "S flake.nix\nH flake.lock"
+
+        @change_workdir
+        def dummy_func():
+            return "executed"
+
+        result = dummy_func()
+
+        assert result == "executed"
+        assert mock_cmd.run.call_args_list == [
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/test/dotfiles",
+                    "update-index",
+                    "--no-skip-worktree",
+                    "/test/dotfiles/flake.nix",
+                ]
+            ),
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/test/dotfiles",
+                    "update-index",
+                    "--skip-worktree",
+                    "/test/dotfiles/flake.nix",
+                ]
+            ),
+        ]
+
+    @patch("sd.api.nix.common.cmd")
+    @patch("sd.api.nix.common.DOTFILES", "/test/dotfiles")
+    @patch("os.chdir")
+    @patch("os.getcwd", return_value="/different/path")
+    @patch("os.path.isdir", return_value=True)
+    def test_change_workdir_restores_skip_worktree_on_error(
+        self, mock_isdir, mock_getcwd, mock_chdir, mock_cmd
+    ):
+        from sd.api.nix import change_workdir
+
+        mock_cmd.getout.return_value = "S flake.nix\nS flake.lock"
+
+        @change_workdir
+        def dummy_func():
+            raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            dummy_func()
+
+        assert mock_cmd.run.call_args_list == [
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/test/dotfiles",
+                    "update-index",
+                    "--no-skip-worktree",
+                    "/test/dotfiles/flake.nix",
+                ]
+            ),
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/test/dotfiles",
+                    "update-index",
+                    "--no-skip-worktree",
+                    "/test/dotfiles/flake.lock",
+                ]
+            ),
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/test/dotfiles",
+                    "update-index",
+                    "--skip-worktree",
+                    "/test/dotfiles/flake.nix",
+                ]
+            ),
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/test/dotfiles",
+                    "update-index",
+                    "--skip-worktree",
+                    "/test/dotfiles/flake.lock",
+                ]
+            ),
+        ]
+
 
 class TestGetGenerations:
     @patch("sd.api.nix.common.get_re_compile")
@@ -399,6 +503,118 @@ class TestNhBackend:
 
 
 class TestNixBackendDryRunOutput:
+    @patch("sd.api.nix.common.cmd")
+    @patch("sd.api.nix.nix.cmd")
+    @patch("sd.api.nix.nix.nix_diff")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    @patch("sd.api.nix.nix.get_flake", return_value="/dotfiles")
+    def test_build_with_nix_restores_skip_worktree(
+        self, mock_get_flake, mock_generation, mock_diff, mock_nix_cmd, mock_common_cmd
+    ):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nix import build_with_nix
+
+        mock_common_cmd.getout.return_value = "S flake.nix"
+        mock_nix_cmd.run.return_value = CompletedProcess(args=[], returncode=0)
+
+        build_with_nix(
+            FlakeOutputs.NIXOS,
+            "server",
+            debug=False,
+            dry_run=False,
+            extra_args=None,
+        )
+
+        assert mock_common_cmd.run.call_args_list == [
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/dotfiles",
+                    "update-index",
+                    "--no-skip-worktree",
+                    "/dotfiles/flake.nix",
+                ]
+            ),
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/dotfiles",
+                    "update-index",
+                    "--skip-worktree",
+                    "/dotfiles/flake.nix",
+                ]
+            ),
+        ]
+        mock_nix_cmd.run.assert_called_once_with(
+            [
+                "sudo",
+                "nixos-rebuild",
+                "build",
+                "--flake",
+                "/dotfiles#server",
+                "--impure",
+            ],
+            dry_run=False,
+        )
+
+    @patch("sd.api.nix.common.cmd")
+    @patch("sd.api.nix.nix.cmd")
+    @patch("sd.api.nix.nix.get_current_generation", return_value=None)
+    @patch("sd.api.nix.nix.get_flake", return_value="/dotfiles")
+    def test_build_with_nix_restores_skip_worktree_on_error(
+        self, mock_get_flake, mock_generation, mock_nix_cmd, mock_common_cmd
+    ):
+        from sd.api.nix import FlakeOutputs
+        from sd.api.nix.nix import build_with_nix
+
+        mock_common_cmd.getout.return_value = "S flake.nix"
+        mock_nix_cmd.run.side_effect = RuntimeError("boom")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            build_with_nix(
+                FlakeOutputs.NIXOS,
+                "server",
+                debug=False,
+                dry_run=False,
+                extra_args=None,
+            )
+
+        assert mock_common_cmd.run.call_args_list == [
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/dotfiles",
+                    "update-index",
+                    "--no-skip-worktree",
+                    "/dotfiles/flake.nix",
+                ]
+            ),
+            call(
+                [
+                    "git",
+                    "-C",
+                    "/dotfiles",
+                    "update-index",
+                    "--skip-worktree",
+                    "/dotfiles/flake.nix",
+                ]
+            ),
+        ]
+        mock_nix_cmd.run.assert_called_once_with(
+            [
+                "sudo",
+                "nixos-rebuild",
+                "build",
+                "--flake",
+                "/dotfiles#server",
+                "--impure",
+            ],
+            dry_run=False,
+        )
+
     @patch("sd.api.nix.nix.nix_diff")
     @patch("sd.api.nix.nix.get_current_generation", return_value=None)
     @patch("sd.api.nix.nix.get_flake", return_value="/dotfiles")

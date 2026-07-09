@@ -2,6 +2,7 @@ import getpass
 import json
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
@@ -121,24 +122,81 @@ PLATFORM = get_flake_platform()
 DEFAULT_HOST = get_default_host()
 
 
+def _resolve_workdir(args: tuple[object, ...], kw: dict[str, object]) -> str:
+    old_workdir = os.getcwd()
+    if "workdir" in kw:
+        workdir = kw["workdir"]
+        if isinstance(workdir, (str, os.PathLike)):
+            return os.path.abspath(workdir)
+    elif len(args) >= 2 and os.path.isdir(args[1]):
+        return os.path.abspath(args[1])
+    elif DOTFILES:
+        return os.path.abspath(DOTFILES)
+    return old_workdir
+
+
+def _get_skip_worktree_files(workdir: str) -> list[str]:
+    try:
+        output = cmd.getout(
+            [
+                "git",
+                "-C",
+                workdir,
+                "ls-files",
+                "-t",
+                "--full-name",
+                "--",
+                "flake.nix",
+                "flake.lock",
+            ],
+            shell=False,
+            show=False,
+        )
+    except SubprocessError:
+        return []
+
+    skip_files: list[str] = []
+    for line in output.splitlines():
+        if not line:
+            continue
+        status, _, relpath = line.partition(" ")
+        if status == "S" and relpath:
+            skip_files.append(os.path.join(workdir, relpath))
+    return skip_files
+
+
+@contextmanager
+def flake_skip_worktree_guard(workdir: str):
+    workdir = os.path.abspath(workdir)
+    restored_files: list[str] = []
+
+    try:
+        for filepath in _get_skip_worktree_files(workdir):
+            cmd.run(
+                ["git", "-C", workdir, "update-index", "--no-skip-worktree", filepath]
+            )
+            restored_files.append(filepath)
+
+        yield
+    finally:
+        for filepath in restored_files:
+            cmd.run(["git", "-C", workdir, "update-index", "--skip-worktree", filepath])
+
+
 def change_workdir(func):
     @wraps(func)
     def wrapper(*args, **kw):
         old_workdir = os.getcwd()
-        new_workdir = old_workdir
-        if "workdir" in kw:
-            new_workdir = os.path.abspath(kw["workdir"])
-        elif len(args) >= 2 and os.path.isdir(args[1]):
-            new_workdir = os.path.abspath(args[1])
-        elif DOTFILES:
-            new_workdir = os.path.abspath(DOTFILES)
+        new_workdir = _resolve_workdir(args, kw)
         is_change = new_workdir != old_workdir
-        if is_change:
-            os.chdir(new_workdir)
-        result = func(*args, **kw)
-        if is_change:
-            os.chdir(old_workdir)
-        return result
+        try:
+            if is_change:
+                os.chdir(new_workdir)
+            with flake_skip_worktree_guard(new_workdir):
+                return func(*args, **kw)
+        finally:
+            if is_change:
+                os.chdir(old_workdir)
 
     return wrapper
 

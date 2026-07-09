@@ -1,6 +1,6 @@
 import typer
 
-from sd.api.nix.common import get_flake, shell_backup
+from sd.api.nix.common import flake_skip_worktree_guard, get_flake, shell_backup
 from sd.utils import cmd, fmt
 from sd.utils.enums import FlakeOutputs
 
@@ -53,14 +53,16 @@ def build_with_nh(
     dry_run: bool,
     extra_args: list[str] | None,
 ):
-    namespace = get_nh_namespace(cfg)
-    cmd_list = (
-        ["nh", namespace, "build"]
-        + _nh_build_flags(debug=debug, dry_run=dry_run)
-        + [_config_flag(cfg), host, get_flake()]
-    )
-    cmd_list = _append_extra_args(cmd_list, extra_args)
-    cmd.run(cmd_list, dry_run=dry_run)
+    flake_root = get_flake()
+    with flake_skip_worktree_guard(flake_root):
+        namespace = get_nh_namespace(cfg)
+        cmd_list = (
+            ["nh", namespace, "build"]
+            + _nh_build_flags(debug=debug, dry_run=dry_run)
+            + [_config_flag(cfg), host, flake_root]
+        )
+        cmd_list = _append_extra_args(cmd_list, extra_args)
+        cmd.run(cmd_list, dry_run=dry_run)
 
 
 def switch_with_nh(
@@ -70,19 +72,23 @@ def switch_with_nh(
     dry_run: bool,
     extra_args: list[str] | None,
 ):
-    namespace = get_nh_namespace(cfg)
-    if cfg == FlakeOutputs.DARWIN:
-        shell_backup()
-    cmd_list = (
-        ["nh", namespace, "switch"]
-        + _nh_build_flags(debug=debug, dry_run=dry_run)
-        + [_config_flag(cfg), host, get_flake()]
-    )
-    cmd_list = _append_extra_args(cmd_list, extra_args)
-    cmd.run(cmd_list, dry_run=dry_run)
+    flake_root = get_flake()
+    with flake_skip_worktree_guard(flake_root):
+        namespace = get_nh_namespace(cfg)
+        if cfg == FlakeOutputs.DARWIN:
+            shell_backup()
+        cmd_list = (
+            ["nh", namespace, "switch"]
+            + _nh_build_flags(debug=debug, dry_run=dry_run)
+            + [_config_flag(cfg), host, flake_root]
+        )
+        cmd_list = _append_extra_args(cmd_list, extra_args)
+        cmd.run(cmd_list, dry_run=dry_run)
 
 
 def repl_with_nh(cfg: FlakeOutputs, dry_run: bool):
-    namespace = get_nh_namespace(cfg)
-    cmd_list = ["nh", namespace, "repl"] + _nh_repl_flags() + [get_flake()]
-    cmd.run(cmd_list, dry_run=dry_run)
+    flake_root = get_flake()
+    with flake_skip_worktree_guard(flake_root):
+        namespace = get_nh_namespace(cfg)
+        cmd_list = ["nh", namespace, "repl"] + _nh_repl_flags() + [flake_root]
+        cmd.run(cmd_list, dry_run=dry_run)
