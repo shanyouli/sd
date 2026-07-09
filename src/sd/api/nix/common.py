@@ -1,4 +1,5 @@
 import getpass
+import glob as glob_mod
 import json
 import os
 import re
@@ -165,6 +166,33 @@ def _get_skip_worktree_files(workdir: str) -> list[str]:
     return skip_files
 
 
+def _rehardlink_flake_files(workdir: str) -> None:
+    """检测并修复断裂的硬链接。
+
+    遍历 flake/*/flake.* 子目录文件，若根目录存在同名文件且 inode 不同
+    （硬链接已断裂），则删除根目录文件并重新建立硬链接，确保 nix 构建时
+    读取到最新的子 flake 内容。
+    """
+    pattern = os.path.join(workdir, "flake", "*", "flake.*")
+    for sub_file in glob_mod.glob(pattern):
+        if not os.path.isfile(sub_file):
+            continue
+        basename = os.path.basename(sub_file)
+        root_file = os.path.join(workdir, basename)
+        if not os.path.isfile(root_file):
+            continue
+        # 符号链接通过路径寻址，不需要修复
+        if os.path.islink(root_file):
+            continue
+        # 比较 inode：相同则仍是硬链接，不同则已断裂
+        sub_stat = os.lstat(sub_file)
+        root_stat = os.lstat(root_file)
+        if sub_stat.st_ino != root_stat.st_ino:
+            fmt.info(f"硬链接已断裂，重新建立: {root_file} -> {sub_file}")
+            os.remove(root_file)
+            os.link(sub_file, root_file)
+
+
 @contextmanager
 def flake_skip_worktree_guard(workdir: str):
     workdir = os.path.abspath(workdir)
@@ -176,6 +204,8 @@ def flake_skip_worktree_guard(workdir: str):
                 ["git", "-C", workdir, "update-index", "--no-skip-worktree", filepath]
             )
             restored_files.append(filepath)
+
+        _rehardlink_flake_files(workdir)
 
         yield
     finally:
