@@ -21,7 +21,7 @@ def build_with_nix(
     extra_args: list[str] | None,
 ):
     flake_root = get_flake()
-    with flake_skip_worktree_guard(flake_root):
+    with flake_skip_worktree_guard(flake_root, debug=debug):
         if cfg == FlakeOutputs.NIXOS:
             cmd_list = ["sudo", "nixos-rebuild", "build", "--flake"]
         elif cfg == FlakeOutputs.DARWIN:
@@ -51,7 +51,7 @@ def switch_with_nix(
     extra_args: list[str] | None,
 ):
     flake_root = get_flake()
-    with flake_skip_worktree_guard(flake_root):
+    with flake_skip_worktree_guard(flake_root, debug=debug):
         if cfg == FlakeOutputs.NIXOS:
             cmd_str = "sudo nixos-rebuild switch --flake"
         elif cfg == FlakeOutputs.DARWIN:
@@ -89,7 +89,7 @@ def repl_with_nix(
 ):
     flake_root = get_flake() if flake else None
     workdir = flake_root if flake_root else os.getcwd()
-    with flake_skip_worktree_guard(workdir):
+    with flake_skip_worktree_guard(workdir, debug=False):
         cmd_str = "nix repl --expr "
         if pkgs:
             exarg = "import <nixpkgs> {}"

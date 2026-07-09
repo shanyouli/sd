@@ -54,7 +54,7 @@ def build_with_nh(
     extra_args: list[str] | None,
 ):
     flake_root = get_flake()
-    with flake_skip_worktree_guard(flake_root):
+    with flake_skip_worktree_guard(flake_root, debug=debug):
         namespace = get_nh_namespace(cfg)
         cmd_list = (
             ["nh", namespace, "build"]
@@ -73,7 +73,7 @@ def switch_with_nh(
     extra_args: list[str] | None,
 ):
     flake_root = get_flake()
-    with flake_skip_worktree_guard(flake_root):
+    with flake_skip_worktree_guard(flake_root, debug=debug):
         namespace = get_nh_namespace(cfg)
         if cfg == FlakeOutputs.DARWIN:
             shell_backup()
@@ -88,7 +88,7 @@ def switch_with_nh(
 
 def repl_with_nh(cfg: FlakeOutputs, dry_run: bool):
     flake_root = get_flake()
-    with flake_skip_worktree_guard(flake_root):
+    with flake_skip_worktree_guard(flake_root, debug=False):
         namespace = get_nh_namespace(cfg)
         cmd_list = ["nh", namespace, "repl"] + _nh_repl_flags() + [flake_root]
         cmd.run(cmd_list, dry_run=dry_run)
